@@ -60,6 +60,12 @@ Fixpoint ins t xs :=
       end
   end.
 
+Definition uniqify xs :=
+  match xs with
+    | [] => []
+    | y::ys => ins y ys
+  end.
+
 Definition combLen (xy:preQ * preQ) := 
   let (x,y) := xy in
     List.length x + List.length y.
@@ -89,52 +95,67 @@ Proof.
   simpl; omega.
 Qed.
 
-Program Fixpoint meldUniqP (xy:preQ * preQ) {measure (combLen xy)} : preQ :=
-  match xy with
-    | ([],y) => y
-    | (x,[]) => x
-    | (p::ps,q::qs) => 
-      match nat_compare (rank p) (rank q) with
-        | Lt => p :: meldUniqP (ps, q::qs)
-        | Gt => q :: meldUniqP (p::ps, qs)
-        | Eq => ins (link p q) (meldUniqP (ps,qs))
+Definition preEmpty : preQ := [].
+
+Definition isEmpty (x : preQ) :=
+  match x with
+    | [] => true
+    | _ => false
+  end.
+
+Definition preInsert x ys :=
+  match ys with
+    | z1::z2::zr =>
+      if beq_nat (rank z1) (rank z2)
+        then skewLink (Node x 0 []) z1 z2 :: zr
+        else Node x 0 [] :: ys
+    | _ => Node x 0 [] :: ys
+  end.
+
+Definition preMeld x y :=
+  meldUniq (uniqify x, uniqify y).
+
+Fixpoint preFindMin x xs :=
+  match xs with 
+    | [] => root x
+    | y::ys => 
+      let z := preFindMin y ys in
+        let w := root x in
+          if LEQ w z
+            then w
+            else z
+  end.
+
+Fixpoint getMin x xs :=
+  match xs with
+    | [] => (x,[])
+    | y::ys =>
+      let (t,ts) := getMin y ys in
+        if LEQ (root y) (root t)
+          then (y,ys)
+          else (t,y::ts)
+  end.
+
+Fixpoint split t x c :=
+  match c with
+    | [] => (t,x)
+    | d::ds => 
+      match rank d with
+        | 0 => split t ((root d)::x) ds
+        | _ => split (d::t) x ds
       end
   end.
-Next Obligation.
-unfold combLen; simpl; omega.
-Qed.
-Next Obligation.
-unfold combLen; simpl; omega.
-Qed.
 
-Check meldUniq_equation.
-(*
-Functional Scheme meldUniqP_ind := Induction for meldUniqP Sort Prop.
-*)
-
-
-Lemma meldUniqP_equation :
-  forall xy : preQ * preQ,
-       meldUniqP xy =
-       (let (x, y) := xy in
-        match x with
-        | nil => y
-        | p :: ps =>
-            match y with
-            | nil => x
-            | q :: qs =>
-                match nat_compare (rank p) (rank q) with
-                | Eq => ins (link p q) (meldUniqP (ps, qs))
-                | Lt => p :: meldUniqP (ps, q :: qs)
-                | Gt => q :: meldUniqP (p :: ps, qs)
-                end
-            end
-        end).
-Proof.
-  intros.
-  destruct xy as [x y].
-  unfold meldUniqP at 1.
-Admitted.
+Definition preDeleteMin x :=
+  match x with
+    | [] => []
+    | y::ys =>
+      match getMin y ys with
+        | (Node _ _ c,t) =>
+          let (p,q) := split [] [] c in
+            fold_right preInsert (preMeld t p) q
+      end
+  end.
 
 Inductive rankN : preT -> nat -> Prop :=
   singleton : forall x, rankN (Node x 0 []) 0
@@ -159,6 +180,8 @@ Inductive minHeap : preT -> Prop :=
         minHeap (Node v n ys) ->
         true = LEQ v w ->
         minHeap (Node v n' ((Node w m p) :: ys)).
+
+Definition PTP x := rankP x /\ minHeap x.
 
 Inductive posBinaryRank : preQ -> nat -> Prop :=
   last : forall x n,
@@ -198,12 +221,30 @@ Inductive All t (p:t -> Prop) : list t -> Prop :=
          All p xs ->
          All p (x::xs).
 
+Definition PQP x := skewBinaryRank x /\ All minHeap x.
+
+Definition PQ := { x:preQ | PQP x}.
+
+Program Definition empty : PQ := [].
+Next Obligation.
+  split; constructor.
+Qed.
+
 Lemma rankDestruct :
   forall v n c m,
     rankN (Node v n c) m ->
     n = m.
 Proof.
   intros v n c m r.
+  inversion r; subst; auto.
+Qed.
+
+Lemma rankRank :
+  forall x n,
+    rankN x n ->
+    rank x = n.
+Proof.
+  intros x n r.
   inversion r; subst; auto.
 Qed.
 
@@ -378,6 +419,133 @@ Proof.
   eapply insNoDupeHelp; eauto.
 Qed.
 
+Lemma preInsertType :
+  forall x ys,
+    PQP ys ->
+    PQP (preInsert x ys).
+Proof.
+  intros x ys P.
+  destruct ys.
+  Case "ys = []".
+    simpl. split.
+    SCase "skewBinaryRank [Node x 0 []]".
+      eapply posSkew.
+      eapply vanilla.
+      eapply last.
+      apply singleton.
+    SCase "All minHeap [Node x 0 []]".
+      eapply Cons.
+      SSCase "minHeap (Node x 0 [])".
+        apply lone.
+      SSCase "All minHeap []".
+        apply Nil.
+  Case "ys = p :: _".
+    unfold preInsert.
+    destruct ys.
+    SCase "ys = nil".
+      destruct P as [R M].
+      split.
+      SSCase "skewBinaryRank [Node x 0 []; p]".
+        eapply posSkew.
+        inversion R as [|n xs P]; subst.
+        inversion P; subst.
+        SSSCase "".
+          destruct n.
+          eapply skew; eauto. constructor.
+          apply vanilla.
+          eapply next. constructor.
+          Focus 2. eauto.
+          auto with arith.
+        SSSCase "impossible".
+          inversion H3.
+      SSCase "All minHeap [Node x 0 []; p]".
+        inversion M; subst.
+        eapply Cons; eauto. constructor.
+    SCase "ys = p0 :: _".
+      rename p0 into q.
+      destruct P as [R M].
+      remember (beq_nat (rank p) (rank q)) as pq; destruct pq.
+      SSCase "rank p = rank q".
+        assert (rank p = rank q) as pq. apply beq_nat_true; auto.
+        split.
+        SSSCase "skewBinaryRank (skewLink (Node x 0 []) p q :: ys".
+          eapply posSkew.
+          inversion R; subst.
+          inversion H; subst.
+          assert (rank p = n).
+          inversion H0; auto; eapply rankRank; auto.
+          subst.
+          assert (rank p < rank q).
+          inversion H0; subst.
+          assert (rank q = m).
+          inversion H6; auto; eapply rankRank; auto.
+          subst. auto.
+          assert False as f. omega. inversion f.
+
+          Show Existentials.
+
+          instantiate (1 := S (rank p)).
+          assert (rank p = n).
+          eapply rankRank; auto.
+          subst.
+          inversion H4; subst.
+          eapply vanilla; auto. eapply last; auto. 
+          apply skewLinkRank; auto.
+          constructor. 
+
+          inversion H5.
+          eapply skew; auto. eapply skewLinkRank; auto.
+          constructor.
+          subst; auto.
+          
+          eapply vanilla; auto.
+          eapply next.
+          eapply skewLinkRank; auto.
+          constructor.
+          Focus 2. 
+          eauto. omega.
+        
+        SSSCase "All minHeap (skewLink (Node x 0 []) p q :: ys)".
+          apply Cons.
+          apply skewLinkHeap; auto.
+          inversion M; auto.
+          inversion M. inversion H2; auto.
+          inversion M. inversion H2; auto.
+      SSCase "rank p <> rank q".
+        assert (rank p <> rank q) as pq. apply beq_nat_false; auto.
+        split.
+        
+        apply posSkew with (n := 0).
+        inversion R; subst.
+        destruct n.
+        SSSCase "skew".
+          apply skew.
+          constructor.
+          inversion H; subst.
+          auto.
+          assert (rank p = 0). apply rankRank; auto.
+          assert (rank q = 0).
+          inversion H4; subst; apply rankRank; auto.
+          assert False as f. omega. inversion f.
+
+       SSSCase "vanilla".
+         apply vanilla.
+         apply next with (m := S n).
+         constructor. omega.
+         inversion H; subst.
+         auto.
+         assert (rank p = S n). apply rankRank; auto.
+         assert (rank q = S n).
+         inversion H4; subst;
+         apply rankRank; auto.
+         assert False as f. omega. inversion f.
+
+       SSSCase "heap".
+         apply Cons; auto.
+         constructor.
+Qed.
+    
+
 Fixpoint skewSize x :=
   match x with
     | Node v _ r => S (fold_right plus 0 (map skewSize r))
@@ -389,475 +557,4 @@ Proof.
   intros x; destruct x; simpl; omega.
 Qed.
 
-
-(*
-Inductive simpleLink : preT -> nat -> Prop :=
-  | simple : forall v i ys y n,
-             rankP (Node v i ys) n ->
-             rankP y n ->
-             simpleLink (Node v i (y::ys)) (S n)
-with typeAlink : preT -> nat -> Prop
-  | typeA : forall x y z n,
-            rankP x n ->
-            rankP z n ->
-            
-
-
-Definition simpleLink 
-  (x:preT) 
-  (fr:forall y, skewSize y < skewSize x -> option nat) 
-  : option nat.
-refine (
-fun (x:preT) 
-     =>
-  match x return (forall y, skewSize y < skewSize x -> option nat) -> option nat with
-    | Node v i c =>
-      match c return (forall y, skewSize y < skewSize (Node v i c) -> option nat) -> option nat with
-        | [] => fun _ => None
-        | y::ys => fun fr =>
-          match @fr y _, @fr (Node v i ys) _ with
-            | Some j, Some k => 
-              if beq_nat j k
-                then Some (S j)
-                else None
-            | _,_ => None
-          end
-      end
-  end).
-Lemma simpleLink1 : forall v i y ys, 
-  (skewSize y < skewSize (Node v i (y :: ys))).
-Proof.
-  intros; simpl; omega.
-Qed.
-apply simpleLink1.
-Lemma simpleLink2 : forall v i y ys, 
-  (skewSize (Node v i ys) < skewSize (Node v i (y :: ys))).
-Proof.
-  intros.
-  simpl. 
-  assert (skewSize y > 0) as ssy. apply skewSizePos.
-  omega.
-Qed.
-apply simpleLink2.
-Defined.
-
-Print simpleLink.
-
-(*
-Program Definition simpleLink 
-  (x:preT) 
-  (fr:forall y, skewSize y < skewSize x -> option nat) 
-  : option nat :=
-  match x with
-    | Node v i c =>
-      match c with
-        | [] => None
-        | y::ys =>
-          match @fr y _, @fr (Node v i ys) _ with
-            | Some j, Some k => 
-              if beq_nat j k
-                then Some (S j)
-                else None
-            | _,_ => None
-          end
-      end
-  end.
-Next Obligation.
-  simpl. omega.
-Qed.
-Next Obligation.
-  simpl. 
-  assert (skewSize y > 0) as ssy. apply skewSizePos.
-  omega.
-Qed.
-*)
-Program Definition skewAlink
-  (x:preT) 
-  (fr:forall y, skewSize y < skewSize x -> option nat) 
-  : option nat :=
-  match x with
-    | Node v i c =>
-      match c with
-        | [y; z] =>
-          match @fr y _, @fr z _ with
-            | Some j, Some k =>
-              if beq_nat j k
-                then Some (S j)
-                else None
-            | _,_ => None
-          end
-        | _ => None
-      end
-  end.
-Next Obligation.
-  simpl. omega.
-Qed.
-Next Obligation.
-  simpl. omega.
-Qed.
-
-Program Definition skewBlink
-  (x:preT) 
-  (fr:forall y, skewSize y < skewSize x -> option nat) 
-  : option nat :=
-  match x with
-    | Node v i c =>
-      match c with
-        | y::ys =>
-          match @fr y _ with
-            | Some 0 => simpleLink (Node v i ys) (fun z p => @fr z _)
-            | _ => None
-          end
-        | _ => None
-      end
-  end.
-Next Obligation.
-  simpl; omega.
-Qed.
-Next Obligation.
-  simpl. omega.
-Qed.
-
-(*
-Function findRank (x:preT) {measure skewSize x} : option nat :=
-  match x with
-    | Node v i c =>
-      match c with
-        | [] => Some 0
-        | _ => let fr := (fun y _ => findRank y) in
-          match simpleLink x fr, 
-                skewAlink x fr, 
-                skewBlink x fr with
-            | Some k,_,_ => Some k
-            | _,Some k,_ => Some k
-            | _,_,Some k => Some k
-            | None,None,None => None
-          end
-      end
-  end.
-*)
-
-Program Fixpoint findRank (x:preT) {measure (skewSize x)} : option nat :=
-  match x with
-    | Node v i c =>
-      match c with
-        | [] => Some 0
-        | _ => 
-          match simpleLink x findRank, 
-                skewAlink x findRank, 
-                skewBlink x findRank with
-            | Some k,_,_ => Some k
-            | _,Some k,_ => Some k
-            | _,_,Some k => Some k
-            | None,None,None => None
-          end
-      end
-  end.
-Next Obligation.
-  split; unfold not; intros d e f J.
-  destruct J as [J [K L]].
-  inversion J.
-  destruct J as [J [K L]].
-  inversion K.
-Qed.
-
-(*
-Functional Scheme findRankEq := Induction for findRank Sort Prop.
-*)
-
-Lemma findRankEq : forall x,
-  findRank x = 
-  match x with
-    | Node v i c =>
-      match c with
-        | [] => Some 0
-        | _ => let fr := (fun y _ => findRank y) in
-          match simpleLink x fr, 
-                skewAlink x fr, 
-                skewBlink x fr with
-            | Some k,_,_ => Some k
-            | _,Some k,_ => Some k
-            | _,_,Some k => Some k
-            | None,None,None => None
-          end
-      end
-  end.
-Proof.
-  intros x.
-  pose (skewSize x) as sx.
-  fold sx.
-  remember (skewSize x) as rsx in |- *.
-  unfold sx. 
-  clear sx.
-  generalize dependent x.
-  apply lt_wf_ind with (n := rsx).
-
-  intros s IH.
-  intros x sx.
-  destruct x as [v i [|p l]].
-  compute; auto.
-  unfold findRank at 1.
-  Print WfExtensionality.
-  rewrite WfExtensionality.fix_sub_eq_ext.
-  fold_sub (.
-  simpl proj1_sig.
-  simpl.
-  rewrite <- sx in *.
-  simpl.
-
-
-  induction rsx.
-
-  intros x sx.
-  destruct x; simpl in sx. 
-  assert False as f.
-  
-  unfold skewSize in sx.
-
-
-  dependent rewrite Heqrsx.
-  generalize dependent rsx.
-  generalize dependent Heqrsx.
-  rewrite Heqrsx.
-  generalize x.
-  
-
-
-  dependent induction x.
-  induction
-  induction x.
-  
-
-
-  pose (skewSize x) as sx.
-  fold sx.
-  generalize dependent sx.
-  remember (skewSize x) as rsx.  induction rsx.
-  unfold sx.
-  generalize dependent x.
-  induction x.
-
-    generalize dependent x.
-
-
-
-  compute; auto.
-  unfold findRank.
-  WfExtensionality.unfold_sub findRank (Node v i (p :: l)).
-  reflexivity.
-  unfold 
-  reflexivity.
-
-  intros x; unfold findRank at 1.
-  simpl; unfold Fix_sub.
-  erewrite F_unfold.
-
-  destruct c as [|p l].
-  reflexivity.
-
-*)  
-  
-
-
-Inductive prenomial a :=
-  single : nat -> a -> prenomial a
-| multiple : nat -> a -> list (prenomial a) -> prenomial a.
-
-Fixpoint size a (x:prenomial a) :=
-  match x with
-    | single _ _ => 1
-    | multiple _ _ xs => S (fold_right plus 0 (map (@size a) xs))
-  end.
-
-Lemma preSizePos : 
-  forall a (x:prenomial a),
-    size x > 0.
-Proof.
-  intros; destruct x; simpl; auto with arith.
-Qed.
-
-Program Fixpoint rank a (x:prenomial a) {measure (size x)} : option nat :=
-  match x with
-    | single _ _ => Some 0
-    | multiple _ v xs => 
-      match xs with
-        | nil => None
-        | y::nil => match rank y with
-                      | Some 0 => Some 1
-                      | _ => None
-                    end
-        | y::z::zs => 
-          match rank y with
-            | Some (S k) =>
-              match rank (multiple 0 v (z::zs)) with
-                | Some (S j) => 
-                  if beq_nat k j 
-                    then Some (S (S k))
-                    else None
-                | _ => None
-              end
-            | _ => None
-          end
-      end
-  end.
-Next Obligation.
-  Print size.
-  simpl. auto with arith.
-Qed.
-Next Obligation.
-  simpl.
-  auto with arith.
-Qed.
-Next Obligation.
-  simpl.
-  assert (size y > 0). apply preSizePos.
-  omega.
-Qed.
-
-Fixpoint maxHeapOrderWithHelp 
-  a (maxim:a) (ord:a -> a -> comparison) (x:prenomial a) : bool :=
-  match x with
-    | single _ y => match ord maxim y with
-                    | Lt => false
-                    | _ => true
-                  end
-    | multiple _ y ys =>
-      (match ord maxim y with
-        | Lt => false
-        | _ => true
-      end
-      &&
-      fold_right andb true (map (maxHeapOrderWithHelp y ord) ys))%bool
-  end.
-
-Definition maxHeapOrderWith 
-  a (ord:a -> a -> comparison) (x:prenomial a) : bool :=
-  match x with
-    | single _ _ => true
-    | multiple _ y ys =>
-      fold_right andb true (map (maxHeapOrderWithHelp y ord) ys)
-  end.
-
-Definition nominalRank a (x:prenomial a) :=
-  match x with
-    | single k _ => k
-    | multiple k _ _ => k
-  end.
-
-Definition binomTree a ord := 
-  {x : prenomial a 
-    | rank x = Some (nominalRank x) 
-    /\ maxHeapOrderWith ord x = true}.
-
-Definition preQ a := list (prenomial a).
-
-Fixpoint isbinQWithHelp a m ord (xs:preQ a) :=
-  match xs with
-    | [] => true
-    | y::ys =>
-      (maxHeapOrderWith ord y &&
-        match nominalRank y, rank y with
-          | _,None => false
-          | k,Some n => 
-            beq_nat k n &&
-            match nat_compare m n with
-              | Lt => isbinQWithHelp n ord ys
-              | _ => false
-            end
-        end)%bool
-  end.
-
-Definition isbinQWith a ord (xs:preQ a) :=
-  match xs with
-    | [] => true
-    | y::ys =>
-      (maxHeapOrderWith ord y &&
-        match nominalRank y, rank y with
-          | _,None => false
-          | k,Some n => beq_nat k n && isbinQWithHelp n ord ys
-        end)%bool
-  end.
-
-Definition findTMax a (xs:prenomial a) :=
-  match xs with
-    | single _ v => v
-    | multiple _ v _ => v
-  end.
-
-Definition maxWith a ord (x:a) y :=
-  match ord x y with
-    | Lt => y
-    | _ => x
-  end.
-
-Fixpoint findQMaxWith a ord (xs:preQ a) :=
-  match xs with
-    | [] => None
-    | y::ys => Some
-      (let p := findTMax y in
-        match findQMaxWith ord ys with
-          | None => p
-          | Some q => maxWith ord p q
-        end)
-  end.
-
-Fixpoint join a ord (x:prenomial a) (y:prenomial a) :=
-  match ord (findTMax x) (findTMax y) with
-    | Lt => match y with
-              | single k y => multiple (S k) y [x]
-              | multiple k y ys => multiple (S k) y (x::ys)
-            end
-    | _ => match x with
-              | single k x => multiple (S k) x [y]
-              | multiple k x xs => multiple (S k) x (y::xs)
-            end
-    end.
-
-Fixpoint cascade a ord (x:prenomial a) (xs:preQ a) :=
-  match xs with
-    | [] => [x]
-    | y::ys =>
-      if beq_nat (nominalRank x) (nominalRank y)
-        then cascade ord (join ord x y) ys
-        else x::y::ys
-  end.
-
-Fixpoint insertWith a ord x (xs:preQ a) :=
-  match xs with
-    | [] => [single 0 x]
-    | y::ys =>
-      match nominalRank y with
-        | 0 => cascade ord (join ord (single 0 x) y) ys
-        | S _ => (single 0 x)::xs
-      end
-  end.
-
-Lemma insertKeeps :
-  forall a ord x (xs:preQ a),
-    isbinQWith ord xs = true ->
-    isbinQWith ord (insertWith ord x xs) = true.
-Proof.
-  intros a ord x xs;
-    generalize dependent ord;
-      generalize dependent x.
-  induction xs; intros.
-
-  simpl in *; reflexivity.
-
-  rename a0 into b.
-  unfold insertWith.
-  destruct b.
-  rename a0 into b.
-  simpl.
-  destruct n.
-  remember (ord x b) as oxb.
-  destruct oxb.
-  
-  rewrite <- IHxs with (ord := ord) (.
-  
-
-  simpl in *.
-  
-
-  sdfsdf
-  
+End SkewBinaryHeap.
