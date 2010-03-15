@@ -3,17 +3,19 @@ Require Export OrderSig.
 Module Type PQSig.
 
   Declare Module O:Order.
+  
+  Import O.
 
   Parameter PQ:Type.
 
   Parameter empty:PQ.
 
-  Parameter insert: O.A -> PQ -> PQ.
-  Parameter findMin : PQ -> option O.A.
+  Parameter insert: A -> PQ -> PQ.
+  Parameter findMin : PQ -> option A.
   Parameter deleteMin : PQ -> PQ.
   Parameter meld : PQ -> PQ -> PQ.
 
-  Parameter In : O.A -> PQ -> Prop.
+  Parameter In : A -> PQ -> Prop.
   Parameter Size : PQ -> nat -> Prop.
 
   Parameter inTotal :

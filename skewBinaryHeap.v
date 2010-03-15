@@ -171,6 +171,7 @@ Inductive rankN : preT -> nat -> Prop :=
           rankN (Node v n p) n ->
           rankN y n ->
           rankN (Node v (S n) ((Node x 0 [])::y::p)) (S n).
+Hint Constructors rankN.
 
 Definition rankP x := rankN x (rank x).
 
@@ -180,6 +181,7 @@ Inductive minHeap : preT -> Prop :=
         minHeap (Node v n ys) ->
         true = LEQ v w ->
         minHeap (Node v n' ((Node w m p) :: ys)).
+Hint Constructors minHeap.
 
 Definition PTP x := rankP x /\ minHeap x.
 
@@ -192,12 +194,14 @@ Inductive posBinaryRank : preQ -> nat -> Prop :=
          n < m ->
          posBinaryRank xs m ->
          posBinaryRank (x::xs) n.
+Hint Constructors posBinaryRank.
 
 Inductive binaryRank : preQ -> Prop :=
   zeroBin : binaryRank []
 | posBin : forall n xs,
            posBinaryRank xs n ->
            binaryRank xs.
+Hint Constructors binaryRank.
 
 Inductive posSkewBinaryRank : preQ -> nat -> Prop :=
   vanilla : forall xs n, 
@@ -207,12 +211,14 @@ Inductive posSkewBinaryRank : preQ -> nat -> Prop :=
          rankN x n ->
          posBinaryRank xs n ->
          posSkewBinaryRank (x::xs) n.
+Hint Constructors posSkewBinaryRank.
 
 Inductive skewBinaryRank : preQ -> Prop :=
   zeroSkew : skewBinaryRank []
 | posSkew : forall n xs,
            posSkewBinaryRank xs n ->
            skewBinaryRank xs.
+Hint Constructors skewBinaryRank.
 
 Inductive All t (p:t -> Prop) : list t -> Prop :=
   Nil : All p []
@@ -220,6 +226,7 @@ Inductive All t (p:t -> Prop) : list t -> Prop :=
          p x ->
          All p xs ->
          All p (x::xs).
+Hint Constructors All.
 
 Definition PQP x := skewBinaryRank x /\ All minHeap x.
 
@@ -238,6 +245,7 @@ Proof.
   intros v n c m r.
   inversion r; subst; auto.
 Qed.
+Hint Resolve rankDestruct.
 
 Lemma rankRank :
   forall x n,
@@ -247,6 +255,7 @@ Proof.
   intros x n r.
   inversion r; subst; auto.
 Qed.
+Hint Resolve rankRank.
 
 Lemma rankFunction :
   forall x n m,
@@ -273,6 +282,7 @@ Proof.
   assert (yn = n); try (eapply rankDestruct; eauto); subst.
   remember (LEQ v w) as vw; destruct vw; apply simple; auto.
 Qed.
+Hint Resolve linkRank.
 
 Lemma linkHeap :
   forall x y, minHeap x -> minHeap y -> minHeap (link x y).
@@ -283,6 +293,7 @@ Proof.
   remember (LEQ v w) as vw; destruct vw; eapply top; eauto.
   apply leqSymm; auto.
 Qed.
+Hint Resolve linkHeap.
 
 Lemma skewLinkRank :
   forall n x y z,
@@ -305,6 +316,7 @@ Proof.
           try (apply skewB; assumption);
             try (apply skewA; assumption).
 Qed.
+Hint Resolve skewLinkRank.
 
 Lemma skewLinkHeap :
   forall x y z, 0 = rank x -> minHeap y -> minHeap z -> 
@@ -318,7 +330,8 @@ Proof.
   Case "a <= b".
     remember (LEQ a c) as ac; destruct ac; simpl.
     SCase "a <= c".
-      eapply top with (n:=0); auto. eapply top; auto. apply lone with (n := 0).
+      eapply top with (n:=0); auto. eapply top.
+      apply lone with (n := 0). auto.
     SCase "a > c".
       assert (true = LEQ c a). apply leqSymm; auto.
       eapply top with (n:=0); auto. eapply top; auto. eauto.
@@ -333,13 +346,15 @@ Proof.
       eapply top with (n:=0); auto. eapply top; auto. eauto.
       eapply leqTransTrue; eauto.
 Qed.
+Hint Resolve skewLinkHeap.
+
 
 Lemma insNoDupeHelp : 
   forall n m x xs, 
     rankN x n ->
     posBinaryRank xs m ->
     n <= m ->
-    exists k, posBinaryRank (ins x xs) k.
+    exists k, k >= n /\ posBinaryRank (ins x xs) k.
 Proof.
   intros n m x xs xn xsm nm.
   generalize dependent x;
@@ -356,11 +371,13 @@ Proof.
     remember (nat_compare j n) as ncjn; destruct ncjn.
     SCase "j = n".
       assert (j = n). apply nat_compare_eq; auto. subst.
-      exists (S n). constructor. apply linkRank; auto.
+      exists (S n). split.
+      auto.  constructor. apply linkRank; auto.
     SCase "j < n".
       assert (j < n) as jn2. apply nat_compare_lt; auto.
-      exists j. eapply next; eauto.
-      constructor; auto.
+      exists j. 
+      split. auto.
+      eapply next; eauto.
     SCase "j > n".
       assert (j > n) as jn2. apply nat_compare_gt; auto.
       assert False as f. omega. inversion f.
@@ -375,10 +392,20 @@ Proof.
     remember (nat_compare j n) as ncjn; destruct ncjn.
     SCase "j = n".
       assert (j = n). apply nat_compare_eq; auto. subst.
-      eapply IHxsm; eauto. apply linkRank; auto.
+      fold ins.
+      assert (exists k, k >= S n 
+        /\ posBinaryRank (ins (link (Node w n q) (Node v n p)) xs) k).
+      eapply IHxsm.
+      auto. auto.
+      destruct H1.
+      destruct H1.
+      exists x.
+      split. auto with arith.
+      auto.
     SCase "j < n".
       assert (j < n) as jn2. apply nat_compare_lt; auto.
-      exists j. eapply next; eauto.
+      exists j. 
+      split; auto.
       eapply next; eauto.
     SCase "j > n".
       assert (j > n) as jn2. apply nat_compare_gt; auto.
@@ -388,7 +415,7 @@ Qed.
 Lemma insNoDupe : 
   forall n x xs, 
     posSkewBinaryRank (x::xs) n ->
-    exists k, posBinaryRank (ins x xs) k.
+    exists k, k >= n /\ posBinaryRank (ins x xs) k.
 Proof.
   intros n x xs xxsn.
   inversion xxsn; subst.
@@ -423,7 +450,7 @@ Lemma preInsertType :
   forall x ys,
     PQP ys ->
     PQP (preInsert x ys).
-Proof.
+Proof with auto.
   intros x ys P.
   destruct ys.
   Case "ys = []".
@@ -452,7 +479,6 @@ Proof.
         SSSCase "".
           destruct n.
           eapply skew; eauto. constructor.
-          apply vanilla.
           eapply next. constructor.
           Focus 2. eauto.
           auto with arith.
@@ -467,7 +493,6 @@ Proof.
       remember (beq_nat (rank p) (rank q)) as pq; destruct pq.
       SSCase "rank p = rank q".
         assert (rank p = rank q) as pq. apply beq_nat_true; auto.
-        split.
         SSSCase "skewBinaryRank (skewLink (Node x 0 []) p q :: ys".
           eapply posSkew.
           inversion R; subst.
@@ -482,38 +507,23 @@ Proof.
           subst. auto.
           assert False as f. omega. inversion f.
 
-          Show Existentials.
-
           instantiate (1 := S (rank p)).
           assert (rank p = n).
           eapply rankRank; auto.
           subst.
           inversion H4; subst.
-          eapply vanilla; auto. eapply last; auto. 
-          apply skewLinkRank; auto.
-          constructor. 
+          eapply vanilla; auto.
 
           inversion H5.
-          eapply skew; auto. eapply skewLinkRank; auto.
-          constructor.
+          eapply skew; auto. 
           subst; auto.
           
           eapply vanilla; auto.
-          eapply next.
+          apply next with (m := m).
           eapply skewLinkRank; auto.
-          constructor.
-          Focus 2. 
-          eauto. omega.
-        
-        SSSCase "All minHeap (skewLink (Node x 0 []) p q :: ys)".
-          apply Cons.
-          apply skewLinkHeap; auto.
-          inversion M; auto.
-          inversion M. inversion H2; auto.
-          inversion M. inversion H2; auto.
+          omega. auto.
       SSCase "rank p <> rank q".
         assert (rank p <> rank q) as pq. apply beq_nat_false; auto.
-        split.
         
         apply posSkew with (n := 0).
         inversion R; subst.
@@ -538,13 +548,273 @@ Proof.
          assert (rank q = S n).
          inversion H4; subst;
          apply rankRank; auto.
-         assert False as f. omega. inversion f.
+         assert False as f. omega. inversion f. 
 
-       SSSCase "heap".
+    SCase "All".
+      rename p0 into q.
+      destruct P as [_ M].
+      remember (beq_nat (rank p) (rank q)) as pq; destruct pq.
+      SSCase "All minHeap (skewLink (Node x 0 []) p q :: ys)".
+        apply Cons.
+        apply skewLinkHeap; auto.
+        inversion M; auto.
+        inversion M. inversion H2; auto.
+        inversion M. inversion H2; auto.
+      SSCase "All minHeap (Node x 0 [] :: p :: q :: ys".
          apply Cons; auto.
-         constructor.
 Qed.
+
+Definition min x y :=
+  match nat_compare x y with
+    | Lt => x
+    | _ => y
+  end.
+
+Lemma meldUniqRank :
+  forall x n y m,
+    posBinaryRank x n ->
+    posBinaryRank y m ->
+    exists k, k >= min n m
+      /\ posBinaryRank (meldUniq (x,y)) k.
+Proof with auto.
+  assert 
+    (let P := 
+      fun (xy:(preQ*preQ)) r =>
+        let (x,y) := xy in
+          forall n m,
+            posBinaryRank x n ->
+            posBinaryRank y m ->
+            exists k, k >= min n m
+              /\ posBinaryRank r k
+            in forall xy, P xy (meldUniq xy)).
+  eapply meldUniq_ind; intros; auto.
+
+  inversion H.
+  inversion H0.
+  assert (rank p = n). inversion H0; apply rankRank; auto.
+  assert (rank q = m). inversion H1; apply rankRank; auto.
+  subst.
+  assert (rank p < rank q). apply nat_compare_lt; auto.
+  inversion H0; subst.
+  unfold min. rewrite e0.
+  exists (rank p); split; auto.
+  rewrite meldUniq_equation. 
+  eapply next.
+  Focus 3.
+  eauto. auto. auto.
+  unfold min. rewrite e0. 
+  exists (rank p); split; auto.
+  assert (exists k, k >= min m (rank q)
+    /\ posBinaryRank (meldUniq (ps, q::qs)) k).
+  apply H; auto.
+  destruct H3.
+  destruct H3.
+  eapply next.
+  Focus 3.
+  eauto. eauto.
+  unfold min in H3.
+  remember (nat_compare m (rank q)) as mq; destruct mq; omega.
+  
+  assert (rank p = n). inversion H0; apply rankRank; auto.
+  assert (rank q = m). inversion H1; apply rankRank; auto.
+  subst.
+  assert (rank q < rank p). apply nat_compare_gt; auto.
+  inversion H1; subst.
+  unfold min. rewrite e0.
+  exists (rank q); split; auto.
+  rewrite meldUniq_equation. 
+  eapply next.
+  Focus 3.
+  eauto. auto. auto.
+  unfold min. rewrite e0. 
+  exists (rank q); split; auto.
+  assert (exists k, k >= min (rank p) m
+    /\ posBinaryRank (meldUniq (p::ps, qs)) k).
+  apply H; auto.
+  destruct H3.
+  destruct H3.
+  eapply next.
+  Focus 3.
+  eauto. eauto.
+  unfold min in H3.
+  remember (nat_compare (rank p) m) as mq; destruct mq; omega.
+
+  assert (rank p = rank q). apply nat_compare_eq; auto.
+  assert (exists k : nat,
+    k >= S (min n m)
+    /\ posBinaryRank (ins (link p q) (meldUniq (ps, qs))) k).
+  apply insNoDupe.
+    inversion H0; inversion H1; subst.
+  rewrite meldUniq_equation.
+  eapply vanilla. eapply last. eapply linkRank.
+  assert (rank p = n). apply rankRank; auto; subst.
+  assert (rank q = m). apply rankRank; auto; subst.
+  rewrite H3 in *. rewrite H4 in *. subst.
+  unfold min.
+  remember (nat_compare (rank p) (rank p)) as pp.
+  destruct pp; auto.
+  assert (rank p = n). apply rankRank; auto; subst.
+  assert (rank q = m). apply rankRank; auto; subst.
+  rewrite H3 in *. rewrite H4 in *. subst.
+  unfold min.
+  remember (nat_compare (rank p) (rank p)) as pp.
+  destruct pp; auto.
+  
+  rewrite meldUniq_equation.
+  assert (rank p = n). apply rankRank; auto; subst.
+  assert (rank q = m). apply rankRank; auto; subst.
+  rewrite H3 in *; rewrite H4 in *; subst.
+  assert (min (rank p) (rank p) = rank p) as rp.
+  unfold min.
+  remember (nat_compare (rank p) (rank p)) as pp.
+  destruct pp; auto.
+  rewrite rp in *.
+  inversion H10. subst.
+  eapply skew; auto. 
+  subst.
+  eapply vanilla; auto.
+  eapply next. Focus 3. eauto.
+  auto. omega.
+  
+  rewrite meldUniq_equation.
+  assert (rank p = n). apply rankRank; auto; subst.
+  assert (rank q = m). apply rankRank; auto; subst.
+  rewrite H3 in *; rewrite H4 in *; subst.
+  assert (min (rank p) (rank p) = rank p) as rp.
+  unfold min.
+  remember (nat_compare (rank p) (rank p)) as pp.
+  destruct pp; auto.
+  rewrite rp in *.
+  inversion H6. subst.
+  eapply skew; destruct ps; auto.
+  subst.
+  eapply vanilla; destruct ps; auto.
+  eapply next. Focus 3. eauto.
+  auto. omega.
+
+  assert (rank p = n). apply rankRank; auto; subst.
+  assert (rank q = m). apply rankRank; auto; subst.
+  rewrite H3 in *; rewrite H4 in *; subst.
+  assert (min (rank p) (rank p) = rank p) as rp.
+  unfold min.
+  remember (nat_compare (rank p) (rank p)) as pp.
+  destruct pp; auto.
+  rewrite rp in *.
+  
+  assert (exists k, k >= min m0 m1
+    /\ posBinaryRank (meldUniq (ps,qs)) k).
+  apply H; auto.
+  destruct H2.
+  destruct H2.
+  remember (nat_compare (S (rank p)) x) as spx.
+  destruct spx.
+  assert (S (rank p) = x). apply nat_compare_eq. auto.
+  subst.
+  apply skew; auto.
+  assert (S (rank p) < x). apply nat_compare_lt. auto.
+  apply vanilla.
+  eapply next.
+  Focus 3.
+  eauto.
+  auto.
+  auto.
+  assert (S (rank p) > x). apply nat_compare_gt. auto.
+  assert (S (rank p) < x).
+  assert (S (rank p) <= min m0 m1).
+  assert (S (rank p) <= m0); auto with arith.
+  assert (S (rank p) <= m1); auto with arith.
+  unfold min.
+  remember (nat_compare m0 m1) as mm; destruct mm; auto.
+  omega. assert False as f. omega. inversion f.
+
+  destruct H3.
+  destruct H3.
+  exists x. split.
+  auto with arith.
+  auto.
+
+  simpl in H.
+  intros.
+  pose (H (x,y)) as I.
+  simpl in I.
+  pose (I n m H0 H1) as J.
+  destruct J.
+  exists x0.
+  split.
+  destruct H2.
+  auto.
+  destruct H2. auto.
+Qed.
+
+Lemma meldUniqType :
+  forall x y,
+    PQP x ->
+    binaryRank x ->
+    PQP y ->
+    binaryRank y ->
+    PQP (meldUniq (x,y)).
+Proof.
+  assert 
+    (let P := 
+      fun (xy:(preQ*preQ)) r =>
+        let (x,y) := xy in
+          PQP x ->
+          binaryRank x ->
+          PQP y ->
+          binaryRank y ->
+          PQP r 
+          in forall xy, P xy (meldUniq xy)).
+  eapply meldUniq_ind; intros; auto.
+  split.
+  Case "skewBinaryRank (p :: meldUniq (ps, q :: qs))".
+    assert (skewBinaryRank (meldUniq (ps, q::qs))) as S.
+    apply H; auto.
+    inversion H0; auto.
+    split; auto.
+    inversion H4; auto.
+    inversion H6; auto.
+    inversion H8; auto.
+    subst. eapply posSkew; auto. 
+    eapply vanilla; auto.
+    eauto. subst.
+    eapply posSkew; auto.
+    eapply vanilla; eauto.
+    inversion H5; auto.
+    inversion H1; auto.
+    inversion H4; subst; auto.
+    eapply posBin; eauto.
     
+  
+          
+
+  eapply meldUniq.
+
+Lemma preMeldType :
+  forall x y,
+    PQP x ->
+    PQP y ->
+    PQP (preMeld x y).
+Proof with auto.
+  unfold preMeld.
+  Check meldUniq_ind.
+  assert 
+    (let P :=
+      fun xy r =>
+        let (x,y) := xy in
+          PQP x -> PQP y -> PQP r in
+    forall xy, P xy (meldUniq )
+  Check meldUniq_ind.
+  eapply meldUniq_ind.
+
+  intros x y X Y.
+  unfold preMeld.
+  remember (uniqify x) as ux.
+  remember (uniqify y) as uy.
+  remember (ux, uy) as uxy.
+  pose meldUniq_ind as M.
+  apply M.
+  Check meldUniq_ind with (P := fun p r => 
+
 
 Fixpoint skewSize x :=
   match x with
