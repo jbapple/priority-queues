@@ -446,6 +446,21 @@ Proof.
   eapply insNoDupeHelp; eauto.
 Qed.
 
+Lemma insHeap : 
+  forall x xs,
+    minHeap x ->
+    All minHeap xs ->
+    All minHeap (ins x xs).
+Proof.
+  intros x xs.
+  generalize dependent x.
+  induction xs; intros; auto.
+    simpl; auto.
+    inversion H0; subst.
+    simpl.
+    remember (nat_compare (rank x) (rank a)) as xa; destruct xa; auto.
+Qed.
+
 Lemma preInsertType :
   forall x ys,
     PQP ys ->
@@ -746,75 +761,78 @@ Proof with auto.
   destruct H2. auto.
 Qed.
 
-Lemma meldUniqType :
+Lemma meldUniqHeap :
   forall x y,
-    PQP x ->
-    binaryRank x ->
-    PQP y ->
-    binaryRank y ->
-    PQP (meldUniq (x,y)).
+    All minHeap x ->
+    All minHeap y ->
+    All minHeap (meldUniq (x,y)).
 Proof.
   assert 
     (let P := 
       fun (xy:(preQ*preQ)) r =>
         let (x,y) := xy in
-          PQP x ->
-          binaryRank x ->
-          PQP y ->
-          binaryRank y ->
-          PQP r 
-          in forall xy, P xy (meldUniq xy)).
+              All minHeap x ->
+              All minHeap y ->
+              All minHeap r
+              in forall xy, P xy (meldUniq xy)).
   eapply meldUniq_ind; intros; auto.
-  split.
-  Case "skewBinaryRank (p :: meldUniq (ps, q :: qs))".
-    assert (skewBinaryRank (meldUniq (ps, q::qs))) as S.
-    apply H; auto.
-    inversion H0; auto.
-    split; auto.
-    inversion H4; auto.
-    inversion H6; auto.
-    inversion H8; auto.
-    subst. eapply posSkew; auto. 
-    eapply vanilla; auto.
-    eauto. subst.
-    eapply posSkew; auto.
-    eapply vanilla; eauto.
-    inversion H5; auto.
-    inversion H1; auto.
-    inversion H4; subst; auto.
-    eapply posBin; eauto.
-    
+  inversion H0; subst.
+  apply Cons; auto.
+  inversion H1; subst.
+  apply Cons; auto.
+  inversion H1; inversion H0; subst.
+  apply insHeap; auto.
+  intros.
+  simpl in H.
+  pose (H (x, y)) as I.
+  eapply I; auto.
+Qed.
   
-          
-
-  eapply meldUniq.
-
 Lemma preMeldType :
   forall x y,
     PQP x ->
     PQP y ->
     PQP (preMeld x y).
 Proof with auto.
-  unfold preMeld.
-  Check meldUniq_ind.
-  assert 
-    (let P :=
-      fun xy r =>
-        let (x,y) := xy in
-          PQP x -> PQP y -> PQP r in
-    forall xy, P xy (meldUniq )
-  Check meldUniq_ind.
-  eapply meldUniq_ind.
-
   intros x y X Y.
+  destruct X as [xR xH].
+  destruct Y as [yR yH].
   unfold preMeld.
-  remember (uniqify x) as ux.
-  remember (uniqify y) as uy.
-  remember (ux, uy) as uxy.
-  pose meldUniq_ind as M.
-  apply M.
-  Check meldUniq_ind with (P := fun p r => 
+  split.
+  destruct x; destruct y.
+  simpl. rewrite meldUniq_equation. auto.
+  simpl. rewrite meldUniq_equation.
+  inversion yR; subst.
+  edestruct insNoDupe with (n := n) (x := p); eauto.
+  eapply posSkew. eapply vanilla.
+  destruct H0. eapply H1.
+  simpl. rewrite meldUniq_equation.
+  inversion xR; subst.
+  edestruct insNoDupe with (n := n) (x := p); eauto.
+  eapply posSkew. eapply vanilla.
+  destruct H0.
+  destruct (ins p x); eauto.
 
+  rename p0 into q.
+  inversion xR; inversion yR; subst.
+  rename n0 into m.
+  inversion H; inversion H1;
+    inversion H0; inversion H4; subst;
+  simpl; edestruct insNoDupe as [R S]; 
+    edestruct insNoDupe as [T U];
+      edestruct meldUniqRank as [P Q];
+        try (eapply posSkew; 
+          apply vanilla; 
+            destruct Q; eauto; eauto; eauto);
+        try (destruct U; eauto);
+          try (destruct S; eauto); eauto.
+
+  apply meldUniqHeap.
+  destruct x; inversion xH; subst; auto.
+  apply insHeap; auto. 
+  destruct y; inversion yH; subst; auto.
+  apply insHeap; auto.
+Qed.
 
 Fixpoint skewSize x :=
   match x with
