@@ -3,3 +3,8 @@ syntax: glob
 *.vo
 *~
 *.glob
+*.exe
+*.hi
+*.o
+*.zip
+*.prof
