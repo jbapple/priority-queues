@@ -6,11 +6,17 @@ import Heap
 import Random
 import System.CPUTime
 
---mkHeap :: (Ord a, Heap h) => [a] -> h a
 mkHeap [] = empty
 mkHeap (x:xs) = insert x (mkHeap xs)
 
---unHeap :: (Ord a, Heap h) => h a -> [a]
+biggestCheck d x =
+    case extractMin x of
+      Nothing -> d
+      Just (y,ys) -> 
+          if y < d
+          then error "Heapsaster!"
+          else biggestCheck y ys
+
 biggest d x =
     case extractMin x of
       Nothing -> d
@@ -33,11 +39,11 @@ time f =
 
 testList l =
     do let x :: L.BinomForest2 Int = mkHeap l
-       print $ biggest 0 x
+       print $ biggest minBound x
 
 testNest l =
     do let x :: N.MinQueue Int = mkHeap l
-       print $ biggest 0 x
+       print $ biggest minBound x
 
 trials = 40
 
