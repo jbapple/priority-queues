@@ -1,8 +1,11 @@
+{-# LANGUAGE TypeFamilies #-}
+
 module NestedBinom where
 
 import Heap
 
-instance Heap MinQueue where
+instance Heap (MinQueue a) where
+    type Elem (MinQueue a) = a
     empty = Vacant
     insert = tinsert
     findMin = tfindMin

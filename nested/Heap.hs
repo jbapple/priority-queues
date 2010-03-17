@@ -1,8 +1,11 @@
+{-# LANGUAGE TypeFamilies,FlexibleContexts #-}
+
 module Heap where
 
 class Heap t where
-    empty :: t a
-    findMin :: Ord a => t a -> Maybe a
-    extractMin :: Ord a => t a -> Maybe (a,t a)
-    insert :: Ord a => a -> t a -> t a
-    meld :: Ord a => t a -> t a -> t a
+    type Elem t
+    empty :: t
+    findMin :: Ord (Elem t) => t -> Maybe (Elem t)
+    extractMin :: Ord (Elem t) => t -> Maybe (Elem t,t)
+    insert :: Ord (Elem t) => Elem t -> t -> t
+    meld :: Ord (Elem t) => t -> t -> t

@@ -1,8 +1,11 @@
+{-# LANGUAGE TypeFamilies #-}
+
 module ListBinom where
 
 import Heap
 
-instance Heap BinomForest2 where
+instance Heap (BinomForest2 a) where
+    type Elem (BinomForest2 a) = a
     empty = Empty
     insert = tinsert
     findMin = tfindMin
@@ -10,9 +13,9 @@ instance Heap BinomForest2 where
     meld = tmeld
 
 data BinomForest2 a = Empty
-                    | NonEmpty a [BinomTree2 Int a] deriving (Show)
+                    | NonEmpty a [BinomTree2 a] deriving (Show)
 
-data BinomTree2 v a = BinomTree2 v a [BinomTree2 Int a] deriving (Show)
+data BinomTree2 a = BinomTree2 {-# UNPACK #-} !Int a [BinomTree2 a] deriving (Show)
 
 textractMin Empty = Nothing
 textractMin t@(NonEmpty x _) = Just (x, deleteMin t)
@@ -57,9 +60,9 @@ meldHelp (x:xs) (y:ys) =
       EQ -> ins (link x y) (meldHelp xs ys)
 
 getMin t [] = (t,[])
-getMin t@(BinomTree2 _ v _) (y:ys) =
-    let (z@(BinomTree2 _ w _),zs) = getMin y ys
-    in if v <= w
+getMin t (y:ys) =
+    let (z,zs) = getMin y ys
+    in if root t <= root z
        then (t,y:ys)
        else (z,t:zs)
 
