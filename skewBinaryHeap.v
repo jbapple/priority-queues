@@ -131,9 +131,9 @@ Fixpoint getMin x xs :=
     | [] => (x,[])
     | y::ys =>
       let (t,ts) := getMin y ys in
-        if LEQ (root y) (root t)
-          then (y,ys)
-          else (t,y::ts)
+        if LEQ (root x) (root t)
+          then (x,xs)
+          else (t,x::ts)
   end.
 
 Fixpoint split t x c :=
@@ -461,32 +461,25 @@ Proof.
     remember (nat_compare (rank x) (rank a)) as xa; destruct xa; auto.
 Qed.
 
-Lemma preInsertType :
+Lemma preInsertRank :
   forall x ys,
-    PQP ys ->
-    PQP (preInsert x ys).
+    skewBinaryRank ys ->
+    skewBinaryRank (preInsert x ys).
 Proof with auto.
   intros x ys P.
   destruct ys.
   Case "ys = []".
-    simpl. split.
+    simpl.
     SCase "skewBinaryRank [Node x 0 []]".
       eapply posSkew.
       eapply vanilla.
       eapply last.
       apply singleton.
-    SCase "All minHeap [Node x 0 []]".
-      eapply Cons.
-      SSCase "minHeap (Node x 0 [])".
-        apply lone.
-      SSCase "All minHeap []".
-        apply Nil.
   Case "ys = p :: _".
     unfold preInsert.
     destruct ys.
     SCase "ys = nil".
-      destruct P as [R M].
-      split.
+      rename P into R.
       SSCase "skewBinaryRank [Node x 0 []; p]".
         eapply posSkew.
         inversion R as [|n xs P]; subst.
@@ -499,12 +492,9 @@ Proof with auto.
           auto with arith.
         SSSCase "impossible".
           inversion H3.
-      SSCase "All minHeap [Node x 0 []; p]".
-        inversion M; subst.
-        eapply Cons; eauto. constructor.
     SCase "ys = p0 :: _".
       rename p0 into q.
-      destruct P as [R M].
+      rename P into R.
       remember (beq_nat (rank p) (rank q)) as pq; destruct pq.
       SSCase "rank p = rank q".
         assert (rank p = rank q) as pq. apply beq_nat_true; auto.
@@ -563,13 +553,39 @@ Proof with auto.
          assert (rank q = S n).
          inversion H4; subst;
          apply rankRank; auto.
-         assert False as f. omega. inversion f. 
+         assert False as f. omega. inversion f.
+Qed. 
 
-    SCase "All".
+Lemma preInsertHeap :
+  forall x ys,
+    All minHeap ys ->
+    All minHeap (preInsert x ys).
+Proof with auto.
+  intros x ys P.
+  destruct ys.
+  Case "ys = []".
+    simpl. 
+    SCase "All minHeap [Node x 0 []]".
+      eapply Cons.
+      SSCase "minHeap (Node x 0 [])".
+        apply lone.
+      SSCase "All minHeap []".
+        apply Nil.
+  Case "ys = p :: _".
+    unfold preInsert.
+    destruct ys.
+    SCase "ys = nil".
+      rename P into M.
+      SSCase "All minHeap [Node x 0 []; p]".
+        inversion M; subst.
+        eapply Cons; eauto. 
+    SCase "ys = p0 :: _".
       rename p0 into q.
-      destruct P as [_ M].
+      rename P into M.
       remember (beq_nat (rank p) (rank q)) as pq; destruct pq.
-      SSCase "All minHeap (skewLink (Node x 0 []) p q :: ys)".
+(*      SSCase "rank p = rank q".
+        assert (rank p = rank q) as pq. apply beq_nat_true; auto.
+  *)    SSCase "All minHeap (skewLink (Node x 0 []) p q :: ys)".
         apply Cons.
         apply skewLinkHeap; auto.
         inversion M; auto.
@@ -577,6 +593,18 @@ Proof with auto.
         inversion M. inversion H2; auto.
       SSCase "All minHeap (Node x 0 [] :: p :: q :: ys".
          apply Cons; auto.
+Qed.
+
+Lemma preInsertType :
+  forall x ys,
+    PQP ys ->
+    PQP (preInsert x ys).
+Proof with auto.
+  intros x ys P.
+  destruct P as [R M].
+  split.
+  apply preInsertRank; auto.
+  apply preInsertHeap; auto.
 Qed.
 
 Definition min x y :=
@@ -788,17 +816,15 @@ Proof.
   eapply I; auto.
 Qed.
   
-Lemma preMeldType :
+  
+Lemma preMeldRank :
   forall x y,
-    PQP x ->
-    PQP y ->
-    PQP (preMeld x y).
+    skewBinaryRank x ->
+    skewBinaryRank y ->
+    skewBinaryRank (preMeld x y).
 Proof with auto.
-  intros x y X Y.
-  destruct X as [xR xH].
-  destruct Y as [yR yH].
+  intros x y xR yR.
   unfold preMeld.
-  split.
   destruct x; destruct y.
   simpl. rewrite meldUniq_equation. auto.
   simpl. rewrite meldUniq_equation.
@@ -826,12 +852,35 @@ Proof with auto.
             destruct Q; eauto; eauto; eauto);
         try (destruct U; eauto);
           try (destruct S; eauto); eauto.
+Qed.
+
+Lemma preMeldHeap :
+  forall x y,
+    All minHeap x ->
+    All minHeap y ->
+    All minHeap (preMeld x y).
+Proof with auto.
+  intros x y xH yH.
 
   apply meldUniqHeap.
   destruct x; inversion xH; subst; auto.
   apply insHeap; auto. 
   destruct y; inversion yH; subst; auto.
   apply insHeap; auto.
+Qed.
+
+Lemma preMeldType :
+  forall x y,
+    PQP x ->
+    PQP y ->
+    PQP (preMeld x y).
+Proof with auto.
+  intros x y X Y.
+  destruct X as [xR xH].
+  destruct Y as [yR yH].
+  split.
+  apply preMeldRank; auto.
+  apply preMeldHeap; auto.
 Qed.
 
 Fixpoint skewSize x :=
@@ -843,6 +892,283 @@ Lemma skewSizePos :
   forall x, skewSize x > 0.
 Proof.
   intros x; destruct x; simpl; omega.
+Qed.
+
+Lemma splitSplit :
+  forall a b b' c h t i s,
+    (h,t) = split a b c ->
+      (i,s) = split a b' c ->
+        h = i.
+Proof.
+  intros a b b' c.
+  generalize dependent a;
+      generalize dependent b;
+          generalize dependent b'.
+  induction c.
+  simpl.
+  intros. inversion H; inversion H0; auto.
+  simpl. destruct (rank a).
+  intros. eapply IHc; eauto.
+  intros. eapply IHc; eauto.
+Qed.
+
+(*
+Lemma splitSuffix:
+  forall a b b' c h t i s,
+    (h,t) = split a b c ->
+      (i,s) = split a b' c ->
+        h = i.
+*)
+
+Lemma splitPosRank :
+  forall v n c,
+    rankP (Node v n c) ->
+    forall r m, posBinaryRank r m ->
+      n <= m ->
+      forall h t z, (h,t) = split r z c ->
+        exists k, posSkewBinaryRank h k.
+Proof.
+  intros v n c H.
+  unfold rankP in H.
+  simpl in H.
+  dependent induction H; intros.
+  simpl in H1. inversion H1. subst.
+  eauto.
+  simpl in H3.
+  destruct y as [w j q].
+  simpl in *. assert (j = n). eauto. subst.
+  destruct n.
+  eapply IHrankN1. Focus 3.
+  eauto. eauto. auto with arith.
+  eapply IHrankN1. Focus 3.
+  eauto. eapply next. eauto.
+  Focus 2. eauto.
+  auto with arith. auto.
+  destruct x as [a b c]; destruct z as [d e f].
+  assert (b = n). eauto; subst.
+  assert (e = n). eauto; subst.
+  subst.
+  simpl in H3.
+  destruct n.
+  inversion H3; subst. eauto.
+  inversion H3; subst.
+  exists (S n).
+  eapply skew; eauto.
+
+  destruct y as [a b c].
+  assert (b = n). eauto.
+  subst.
+  simpl in H3.
+  destruct n.
+  eapply IHrankN1. Focus 3. eauto.
+  eauto. auto with arith.
+  
+  eapply IHrankN1.
+  Focus 3.
+  eapply H3.
+  eapply next. eauto.
+  Focus 2. eauto.
+  auto. auto.
+Qed.
+
+Lemma splitRank :
+  forall v n c,
+    rankP (Node v n c) ->
+    forall h t z, (h,t) = split [] z c ->
+      skewBinaryRank h.
+Proof.
+  intros v n c H.
+  unfold rankP in H.
+  simpl in H.
+  dependent induction H; intros.
+  simpl in H. inversion H; subst. eauto.
+  
+  destruct y as [a b c].
+  assert (b = n); eauto; subst.
+  simpl in H1; destruct n.
+  eapply IHrankN1. eauto.
+  assert (exists k, posSkewBinaryRank h k).
+  eapply splitPosRank.
+  Focus 4. eauto.
+  Focus 2. eapply last. eauto.
+  eauto. auto.
+  destruct H2. eauto.
+  
+  destruct x as [a b c]; destruct z as [d e f].
+  assert (b = n); eauto; subst.
+  assert (e = n); eauto; subst.
+  simpl in H1; destruct n.
+  inversion H1; eauto.
+  inversion H1; subst; eauto.
+  
+  simpl in H1.
+  destruct y as [a b c].
+  assert (b = n); eauto; subst.
+  destruct n; simpl in H1.
+  eapply IHrankN1; eauto.
+  assert (exists k, posSkewBinaryRank h k).
+  eapply splitPosRank.
+  Focus 4. eauto.
+  Focus 2. eapply last. eauto.
+  eauto. auto.
+  destruct H2. eauto.
+Qed.
+
+
+Lemma getMinBinRank:
+  forall x n,
+    rankN x n ->
+    forall xs m, posBinaryRank xs m ->
+      n < m ->
+      forall y z,
+        (y,z) = getMin x xs ->
+        (exists k, k >= n /\
+          posBinaryRank z k)
+        /\ (exists j, j >= n /\
+          rankN y j).
+Proof.
+  intros x n xn xs. 
+  generalize dependent x;
+    generalize dependent n.
+  induction xs; intros.
+  inversion H.
+  simpl in H1.
+  remember (getMin a xs) as axs.
+  destruct axs as [t ts].
+  remember (LEQ (root x) (root t)) as rxt.
+  destruct rxt.
+  inversion_clear H1; subst.
+  split. exists m; eauto 10 with arith.
+  eauto.
+  inversion_clear H1; subst.
+  inversion H; subst.
+  simpl in Heqaxs; eauto.
+  inversion_clear Heqaxs; subst; eauto.
+  split. eauto 10.
+  eauto 10 with arith.
+  assert ((exists k, k >= m /\ posBinaryRank ts k) /\
+    (exists j, j >= m /\ rankN t j)).
+  eapply IHxs.
+  Focus 2. eauto. Focus 3. eauto.
+  eauto. eauto.
+  destruct H1.
+  destruct H1.
+  destruct H1.
+  destruct H2.
+  destruct H2.
+  split.
+  exists n. split; auto. eapply next. auto. Focus 2. eauto.
+  omega.
+  exists x1. split. omega. auto.
+Qed.
+
+Lemma getMinQRank:
+  forall x xs,
+    skewBinaryRank (x::xs) ->
+    forall y z,
+      (y,z) = getMin x xs ->
+      skewBinaryRank z.
+Proof.
+  intros x xs xxs.
+  inversion xxs; subst.
+  inversion H; subst.
+  inversion H0; subst.
+  simpl; intros. inversion H1; subst; eauto.
+  intros.
+  assert ((exists k, k >= n /\
+    posBinaryRank z k)
+  /\ (exists j, j >= n /\
+    rankN y j)). eapply getMinBinRank.
+  Focus 4. eauto. auto. eauto. auto.
+  inversion H2. destruct H5. destruct H5.
+  eapply posSkew. eapply vanilla. eauto.
+  inversion H4; subst.
+  simpl. remember (LEQ (root x) (root x0)) as xx0; destruct xx0; intros.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H1; subst; eauto.
+  simpl.
+  intros.
+  remember (getMin x0 xs0) as x00; destruct x00.
+  remember (LEQ (root x) (root p)) as xp; destruct xp;
+    inversion_clear H5; subst.
+  eauto.
+  assert ((exists k, k >= n /\
+    posBinaryRank l k)
+  /\ (exists j, j >= n /\
+    rankN p j)). eapply getMinBinRank.
+  Focus 4. eauto.
+  auto. eauto. auto.
+  inversion H5.
+  destruct H6.
+  destruct H6.
+  apply posSkew with (n := n).
+  destruct H6. eapply skew. eauto. eauto.
+  eapply vanilla.
+  eapply next. eauto. Focus 2. eauto. omega.
+Qed.
+
+Lemma getMinTRank:
+  forall x xs,
+    skewBinaryRank (x::xs) ->
+    forall y z,
+      (y,z) = getMin x xs ->
+      rankP y.
+Proof.
+  intros x xs; generalize dependent x; induction xs; 
+    intros x; destruct x; unfold rankP; intros.
+  inversion_clear H0; simpl.
+  inversion H; subst.
+  inversion H0; subst.
+  inversion H1; subst.
+  pose H3 as NN.
+  apply rankDestruct in NN; subst. auto.
+  inversion H7.
+  inversion H5.
+
+  simpl in H0.
+  remember (getMin a xs) as axs; destruct axs.
+  remember (LEQ a0 (root p)) as ap; destruct ap;
+    inversion_clear H0; subst.
+  inversion H; subst.
+  inversion H0; subst.
+  inversion H1; subst.
+  pose H4 as NN.
+  apply rankDestruct in NN; subst; auto.
+  pose H3 as NN.
+  apply rankDestruct in NN; subst; auto.
+  eapply IHxs.
+  Focus 2. eauto.
+  inversion H; subst.
+  inversion H0; subst.
+  inversion H1; subst.
+  eauto.
+  eauto.
+Qed.
+
+Lemma deleteMinRank :
+  forall x,
+    skewBinaryRank x ->
+    skewBinaryRank (preDeleteMin x).
+Proof.
+  intros x S.
+  unfold preDeleteMin.
+  destruct x; eauto.
+  remember (getMin p x) as yz. destruct yz as [y z].
+  destruct y as [a b c].
+  remember (split [] [] c) as rs.
+  destruct rs as [r s].
+  assert (skewBinaryRank r) as ss.
+  eapply splitRank. Focus 2. eauto.
+  eapply getMinTRank. Focus 2. eauto. auto.
+  assert (skewBinaryRank z) as zz.
+  eapply getMinQRank. Focus 2. eauto. auto.
+  assert (skewBinaryRank (preMeld z r)).
+  eapply preMeldRank; auto.
+  clear Heqrs.
+  induction s.
+  simpl; auto.
+  simpl.
+  apply preInsertRank; auto.
 Qed.
 
 End SkewBinaryHeap.
