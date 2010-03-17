@@ -97,12 +97,6 @@ Qed.
 
 Definition preEmpty : preQ := [].
 
-Definition isEmpty (x : preQ) :=
-  match x with
-    | [] => true
-    | _ => false
-  end.
-
 Definition preInsert x ys :=
   match ys with
     | z1::z2::zr =>
@@ -175,16 +169,6 @@ Hint Constructors rankN.
 
 Definition rankP x := rankN x (rank x).
 
-Inductive minHeap : preT -> Prop :=
-  lone : forall v n, minHeap (Node v n [])
-| top : forall v n n' w m p ys,
-        minHeap (Node v n ys) ->
-        true = LEQ v w ->
-        minHeap (Node v n' ((Node w m p) :: ys)).
-Hint Constructors minHeap.
-
-Definition PTP x := rankP x /\ minHeap x.
-
 Inductive posBinaryRank : preQ -> nat -> Prop :=
   last : forall x n,
          rankN x n ->
@@ -219,23 +203,6 @@ Inductive skewBinaryRank : preQ -> Prop :=
            posSkewBinaryRank xs n ->
            skewBinaryRank xs.
 Hint Constructors skewBinaryRank.
-
-Inductive All t (p:t -> Prop) : list t -> Prop :=
-  Nil : All p []
-| Cons : forall x xs,
-         p x ->
-         All p xs ->
-         All p (x::xs).
-Hint Constructors All.
-
-Definition PQP x := skewBinaryRank x /\ All minHeap x.
-
-Definition PQ := { x:preQ | PQP x}.
-
-Program Definition empty : PQ := [].
-Next Obligation.
-  split; constructor.
-Qed.
 
 Lemma rankDestruct :
   forall v n c m,
@@ -284,17 +251,6 @@ Proof.
 Qed.
 Hint Resolve linkRank.
 
-Lemma linkHeap :
-  forall x y, minHeap x -> minHeap y -> minHeap (link x y).
-Proof.
-  intros x y X Y.
-  unfold link.
-  destruct x as [v n p]; destruct y as [w m q].
-  remember (LEQ v w) as vw; destruct vw; eapply top; eauto.
-  apply leqSymm; auto.
-Qed.
-Hint Resolve linkHeap.
-
 Lemma skewLinkRank :
   forall n x y z,
     rankN x 0 ->
@@ -317,37 +273,6 @@ Proof.
             try (apply skewA; assumption).
 Qed.
 Hint Resolve skewLinkRank.
-
-Lemma skewLinkHeap :
-  forall x y z, 0 = rank x -> minHeap y -> minHeap z -> 
-    minHeap (skewLink x y z).
-Proof.
-  intros x y z X Y Z.
-  unfold skewLink.
-  destruct x as [a i p]; destruct y as [b j q]; destruct z as [c k r].
-  unfold rank in *; subst.
-  remember (LEQ a b) as ab; destruct ab; simpl.
-  Case "a <= b".
-    remember (LEQ a c) as ac; destruct ac; simpl.
-    SCase "a <= c".
-      eapply top with (n:=0); auto. eapply top.
-      apply lone with (n := 0). auto.
-    SCase "a > c".
-      assert (true = LEQ c a). apply leqSymm; auto.
-      eapply top with (n:=0); auto. eapply top; auto. eauto.
-      eapply leqTransTrue; eauto.
-  Case "b > a".
-    assert (true = LEQ b a). apply leqSymm; auto.
-    remember (LEQ b c) as bc; destruct bc; simpl.
-    SCase "b <= c".
-      eapply top with (n:=0); auto. eapply top; auto. eauto.
-    SCase "b > c".
-      assert (true = LEQ c b). apply leqSymm; auto.
-      eapply top with (n:=0); auto. eapply top; auto. eauto.
-      eapply leqTransTrue; eauto.
-Qed.
-Hint Resolve skewLinkHeap.
-
 
 Lemma insNoDupeHelp : 
   forall n m x xs, 
@@ -446,21 +371,6 @@ Proof.
   eapply insNoDupeHelp; eauto.
 Qed.
 
-Lemma insHeap : 
-  forall x xs,
-    minHeap x ->
-    All minHeap xs ->
-    All minHeap (ins x xs).
-Proof.
-  intros x xs.
-  generalize dependent x.
-  induction xs; intros; auto.
-    simpl; auto.
-    inversion H0; subst.
-    simpl.
-    remember (nat_compare (rank x) (rank a)) as xa; destruct xa; auto.
-Qed.
-
 Lemma preInsertRank :
   forall x ys,
     skewBinaryRank ys ->
@@ -555,57 +465,6 @@ Proof with auto.
          apply rankRank; auto.
          assert False as f. omega. inversion f.
 Qed. 
-
-Lemma preInsertHeap :
-  forall x ys,
-    All minHeap ys ->
-    All minHeap (preInsert x ys).
-Proof with auto.
-  intros x ys P.
-  destruct ys.
-  Case "ys = []".
-    simpl. 
-    SCase "All minHeap [Node x 0 []]".
-      eapply Cons.
-      SSCase "minHeap (Node x 0 [])".
-        apply lone.
-      SSCase "All minHeap []".
-        apply Nil.
-  Case "ys = p :: _".
-    unfold preInsert.
-    destruct ys.
-    SCase "ys = nil".
-      rename P into M.
-      SSCase "All minHeap [Node x 0 []; p]".
-        inversion M; subst.
-        eapply Cons; eauto. 
-    SCase "ys = p0 :: _".
-      rename p0 into q.
-      rename P into M.
-      remember (beq_nat (rank p) (rank q)) as pq; destruct pq.
-(*      SSCase "rank p = rank q".
-        assert (rank p = rank q) as pq. apply beq_nat_true; auto.
-  *)    SSCase "All minHeap (skewLink (Node x 0 []) p q :: ys)".
-        apply Cons.
-        apply skewLinkHeap; auto.
-        inversion M; auto.
-        inversion M. inversion H2; auto.
-        inversion M. inversion H2; auto.
-      SSCase "All minHeap (Node x 0 [] :: p :: q :: ys".
-         apply Cons; auto.
-Qed.
-
-Lemma preInsertType :
-  forall x ys,
-    PQP ys ->
-    PQP (preInsert x ys).
-Proof with auto.
-  intros x ys P.
-  destruct P as [R M].
-  split.
-  apply preInsertRank; auto.
-  apply preInsertHeap; auto.
-Qed.
 
 Definition min x y :=
   match nat_compare x y with
@@ -788,33 +647,6 @@ Proof with auto.
   auto.
   destruct H2. auto.
 Qed.
-
-Lemma meldUniqHeap :
-  forall x y,
-    All minHeap x ->
-    All minHeap y ->
-    All minHeap (meldUniq (x,y)).
-Proof.
-  assert 
-    (let P := 
-      fun (xy:(preQ*preQ)) r =>
-        let (x,y) := xy in
-              All minHeap x ->
-              All minHeap y ->
-              All minHeap r
-              in forall xy, P xy (meldUniq xy)).
-  eapply meldUniq_ind; intros; auto.
-  inversion H0; subst.
-  apply Cons; auto.
-  inversion H1; subst.
-  apply Cons; auto.
-  inversion H1; inversion H0; subst.
-  apply insHeap; auto.
-  intros.
-  simpl in H.
-  pose (H (x, y)) as I.
-  eapply I; auto.
-Qed.
   
   
 Lemma preMeldRank :
@@ -853,72 +685,6 @@ Proof with auto.
         try (destruct U; eauto);
           try (destruct S; eauto); eauto.
 Qed.
-
-Lemma preMeldHeap :
-  forall x y,
-    All minHeap x ->
-    All minHeap y ->
-    All minHeap (preMeld x y).
-Proof with auto.
-  intros x y xH yH.
-
-  apply meldUniqHeap.
-  destruct x; inversion xH; subst; auto.
-  apply insHeap; auto. 
-  destruct y; inversion yH; subst; auto.
-  apply insHeap; auto.
-Qed.
-
-Lemma preMeldType :
-  forall x y,
-    PQP x ->
-    PQP y ->
-    PQP (preMeld x y).
-Proof with auto.
-  intros x y X Y.
-  destruct X as [xR xH].
-  destruct Y as [yR yH].
-  split.
-  apply preMeldRank; auto.
-  apply preMeldHeap; auto.
-Qed.
-
-Fixpoint skewSize x :=
-  match x with
-    | Node v _ r => S (fold_right plus 0 (map skewSize r))
-  end.
-
-Lemma skewSizePos :
-  forall x, skewSize x > 0.
-Proof.
-  intros x; destruct x; simpl; omega.
-Qed.
-
-Lemma splitSplit :
-  forall a b b' c h t i s,
-    (h,t) = split a b c ->
-      (i,s) = split a b' c ->
-        h = i.
-Proof.
-  intros a b b' c.
-  generalize dependent a;
-      generalize dependent b;
-          generalize dependent b'.
-  induction c.
-  simpl.
-  intros. inversion H; inversion H0; auto.
-  simpl. destruct (rank a).
-  intros. eapply IHc; eauto.
-  intros. eapply IHc; eauto.
-Qed.
-
-(*
-Lemma splitSuffix:
-  forall a b b' c h t i s,
-    (h,t) = split a b c ->
-      (i,s) = split a b' c ->
-        h = i.
-*)
 
 Lemma splitPosRank :
   forall v n c,
@@ -1013,7 +779,6 @@ Proof.
   eauto. auto.
   destruct H2. eauto.
 Qed.
-
 
 Lemma getMinBinRank:
   forall x n,
@@ -1171,4 +936,231 @@ Proof.
   apply preInsertRank; auto.
 Qed.
 
+Inductive minHeap : preT -> Prop :=
+  lone : forall v n, minHeap (Node v n [])
+| top : forall v n n' w m p ys,
+        minHeap (Node v n ys) ->
+        true = LEQ v w ->
+        minHeap (Node v n' ((Node w m p) :: ys)).
+Hint Constructors minHeap.
+
+Inductive All t (p:t -> Prop) : list t -> Prop :=
+  Nil : All p []
+| Cons : forall x xs,
+         p x ->
+         All p xs ->
+         All p (x::xs).
+Hint Constructors All.
+
+Lemma linkHeap :
+  forall x y, minHeap x -> minHeap y -> minHeap (link x y).
+Proof.
+  intros x y X Y.
+  unfold link.
+  destruct x as [v n p]; destruct y as [w m q].
+  remember (LEQ v w) as vw; destruct vw; eapply top; eauto.
+  apply leqSymm; auto.
+Qed.
+Hint Resolve linkHeap.
+
+Lemma skewLinkHeap :
+  forall x y z, 0 = rank x -> minHeap y -> minHeap z -> 
+    minHeap (skewLink x y z).
+Proof.
+  intros x y z X Y Z.
+  unfold skewLink.
+  destruct x as [a i p]; destruct y as [b j q]; destruct z as [c k r].
+  unfold rank in *; subst.
+  remember (LEQ a b) as ab; destruct ab; simpl.
+  Case "a <= b".
+    remember (LEQ a c) as ac; destruct ac; simpl.
+    SCase "a <= c".
+      eapply top with (n:=0); auto. eapply top.
+      apply lone with (n := 0). auto.
+    SCase "a > c".
+      assert (true = LEQ c a). apply leqSymm; auto.
+      eapply top with (n:=0); auto. eapply top; auto. eauto.
+      eapply leqTransTrue; eauto.
+  Case "b > a".
+    assert (true = LEQ b a). apply leqSymm; auto.
+    remember (LEQ b c) as bc; destruct bc; simpl.
+    SCase "b <= c".
+      eapply top with (n:=0); auto. eapply top; auto. eauto.
+    SCase "b > c".
+      assert (true = LEQ c b). apply leqSymm; auto.
+      eapply top with (n:=0); auto. eapply top; auto. eauto.
+      eapply leqTransTrue; eauto.
+Qed.
+Hint Resolve skewLinkHeap.
+
+Lemma insHeap : 
+  forall x xs,
+    minHeap x ->
+    All minHeap xs ->
+    All minHeap (ins x xs).
+Proof.
+  intros x xs.
+  generalize dependent x.
+  induction xs; intros; auto.
+    simpl; auto.
+    inversion H0; subst.
+    simpl.
+    remember (nat_compare (rank x) (rank a)) as xa; destruct xa; auto.
+Qed.
+
+Lemma preInsertHeap :
+  forall x ys,
+    All minHeap ys ->
+    All minHeap (preInsert x ys).
+Proof with auto.
+  intros x ys P.
+  destruct ys.
+  Case "ys = []".
+    simpl. 
+    SCase "All minHeap [Node x 0 []]".
+      eapply Cons.
+      SSCase "minHeap (Node x 0 [])".
+        apply lone.
+      SSCase "All minHeap []".
+        apply Nil.
+  Case "ys = p :: _".
+    unfold preInsert.
+    destruct ys.
+    SCase "ys = nil".
+      rename P into M.
+      SSCase "All minHeap [Node x 0 []; p]".
+        inversion M; subst.
+        eapply Cons; eauto. 
+    SCase "ys = p0 :: _".
+      rename p0 into q.
+      rename P into M.
+      remember (beq_nat (rank p) (rank q)) as pq; destruct pq.
+      SSCase "All minHeap (skewLink (Node x 0 []) p q :: ys)".
+        apply Cons.
+        apply skewLinkHeap; auto.
+        inversion M; auto.
+        inversion M. inversion H2; auto.
+        inversion M. inversion H2; auto.
+      SSCase "All minHeap (Node x 0 [] :: p :: q :: ys".
+         apply Cons; auto.
+Qed.
+
+Lemma meldUniqHeap :
+  forall x y,
+    All minHeap x ->
+    All minHeap y ->
+    All minHeap (meldUniq (x,y)).
+Proof.
+  assert 
+    (let P := 
+      fun (xy:(preQ*preQ)) r =>
+        let (x,y) := xy in
+              All minHeap x ->
+              All minHeap y ->
+              All minHeap r
+              in forall xy, P xy (meldUniq xy)).
+  eapply meldUniq_ind; intros; auto.
+  inversion H0; subst.
+  apply Cons; auto.
+  inversion H1; subst.
+  apply Cons; auto.
+  inversion H1; inversion H0; subst.
+  apply insHeap; auto.
+  intros.
+  simpl in H.
+  pose (H (x, y)) as I.
+  eapply I; auto.
+Qed.
+
+Lemma preMeldHeap :
+  forall x y,
+    All minHeap x ->
+    All minHeap y ->
+    All minHeap (preMeld x y).
+Proof with auto.
+  intros x y xH yH.
+
+  apply meldUniqHeap.
+  destruct x; inversion xH; subst; auto.
+  apply insHeap; auto. 
+  destruct y; inversion yH; subst; auto.
+  apply insHeap; auto.
+Qed.
+
+Definition PTP x := rankP x /\ minHeap x.
+
+Definition PQP x := skewBinaryRank x /\ All minHeap x.
+
+Definition PQ := { x:preQ | PQP x}.
+
+Program Definition empty : PQ := [].
+Next Obligation.
+  split; constructor.
+Qed.
+
+Lemma preInsertType :
+  forall x ys,
+    PQP ys ->
+    PQP (preInsert x ys).
+Proof with auto.
+  intros x ys P.
+  destruct P as [R M].
+  split.
+  apply preInsertRank; auto.
+  apply preInsertHeap; auto.
+Qed.
+
+Lemma preMeldType :
+  forall x y,
+    PQP x ->
+    PQP y ->
+    PQP (preMeld x y).
+Proof with auto.
+  intros x y X Y.
+  destruct X as [xR xH].
+  destruct Y as [yR yH].
+  split.
+  apply preMeldRank; auto.
+  apply preMeldHeap; auto.
+Qed.
+
 End SkewBinaryHeap.
+
+(*
+Fixpoint skewSize x :=
+  match x with
+    | Node v _ r => S (fold_right plus 0 (map skewSize r))
+  end.
+
+Lemma skewSizePos :
+  forall x, skewSize x > 0.
+Proof.
+  intros x; destruct x; simpl; omega.
+Qed.
+
+Lemma splitSplit :
+  forall a b b' c h t i s,
+    (h,t) = split a b c ->
+      (i,s) = split a b' c ->
+        h = i.
+Proof.
+  intros a b b' c.
+  generalize dependent a;
+      generalize dependent b;
+          generalize dependent b'.
+  induction c.
+  simpl.
+  intros. inversion H; inversion H0; auto.
+  simpl. destruct (rank a).
+  intros. eapply IHc; eauto.
+  intros. eapply IHc; eauto.
+Qed.
+
+(*
+Lemma splitSuffix:
+  forall a b b' c h t i s,
+    (h,t) = split a b c ->
+      (i,s) = split a b' c ->
+        h = i.
+*)
+*)
