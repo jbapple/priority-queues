@@ -1,10 +1,12 @@
 Require Export OrderSig.
+Require Export PQSig.
 
-Module SkewBinaryHeap (O:Order).
+Module SkewBinaryHeap (OO:Order) <: PQSig.
 
 Set Implicit Arguments.
 
-Import O.
+Module O := OO.
+Export O.
 Require Export Arith.
 Require Export List.
 Require Export Program.
@@ -109,15 +111,21 @@ Definition preInsert x ys :=
 Definition preMeld x y :=
   meldUniq (uniqify x, uniqify y).
 
-Fixpoint preFindMin x xs :=
+Fixpoint preFindMinHelp x xs :=
   match xs with 
     | [] => root x
     | y::ys => 
-      let z := preFindMin y ys in
+      let z := preFindMinHelp y ys in
         let w := root x in
           if LEQ w z
             then w
             else z
+  end.
+
+Definition preFindMin x :=
+  match x with
+    | [] => None
+    | y::ys => Some (preFindMinHelp y ys)
   end.
 
 Fixpoint getMin x xs :=
@@ -150,6 +158,16 @@ Definition preDeleteMin x :=
             fold_right preInsert (preMeld t p) q
       end
   end.
+
+(*
+Extraction preDeleteMin.
+Extraction Language Haskell.
+Extraction Inline and_rect sig_rect meldUniq_terminate.
+Extract Inductive list => "[]" ["[]" "(:)"].
+Extract Inductive bool => "Bool" ["True" "False"].
+Recursive Extraction preDeleteMin.
+Extraction "ExtractedSkew.hs" preDeleteMin preFindMin preInsert preMeld.
+*)
 
 Inductive rankN : preT -> nat -> Prop :=
   singleton : forall x, rankN (Node x 0 []) 0
@@ -938,9 +956,10 @@ Qed.
 
 Inductive minHeap : preT -> Prop :=
   lone : forall v n, minHeap (Node v n [])
-| top : forall v n n' w m p ys,
+| top : forall v n n' w m m' p ys,
         minHeap (Node v n ys) ->
         true = LEQ v w ->
+        minHeap (Node w m' p) ->
         minHeap (Node v n' ((Node w m p) :: ys)).
 Hint Constructors minHeap.
 
@@ -964,12 +983,13 @@ Qed.
 Hint Resolve linkHeap.
 
 Lemma skewLinkHeap :
-  forall x y z, 0 = rank x -> minHeap y -> minHeap z -> 
-    minHeap (skewLink x y z).
+  forall x y z, minHeap y -> minHeap z -> 
+    minHeap (skewLink (Node x 0 []) y z).
 Proof.
-  intros x y z X Y Z.
+  intros x y z Y Z.
   unfold skewLink.
-  destruct x as [a i p]; destruct y as [b j q]; destruct z as [c k r].
+  rename x into a.
+  destruct y as [b j q]; destruct z as [c k r].
   unfold rank in *; subst.
   remember (LEQ a b) as ab; destruct ab; simpl.
   Case "a <= b".
@@ -977,18 +997,23 @@ Proof.
     SCase "a <= c".
       eapply top with (n:=0); auto. eapply top.
       apply lone with (n := 0). auto.
+      eauto. eauto.
     SCase "a > c".
       assert (true = LEQ c a). apply leqSymm; auto.
-      eapply top with (n:=0); auto. eapply top; auto. eauto.
-      eapply leqTransTrue; eauto.
+      eapply top with (n:=0).  Focus 3. apply lone with (n := 0).
+      eapply top. eauto.
+      eapply leqTransTrue; eauto. eauto. auto.
   Case "b > a".
     assert (true = LEQ b a). apply leqSymm; auto.
     remember (LEQ b c) as bc; destruct bc; simpl.
     SCase "b <= c".
-      eapply top with (n:=0); auto. eapply top; auto. eauto.
+      eapply top with (n:=0). Focus 3.
+      eapply lone with (n:= 0). 
+      eapply top; auto. eauto. eauto. auto.
     SCase "b > c".
       assert (true = LEQ c b). apply leqSymm; auto.
-      eapply top with (n:=0); auto. eapply top; auto. eauto.
+      eapply top with (n:=0). Focus 3. eapply lone with (n:=0).
+      eapply top; auto. eauto. eauto.
       eapply leqTransTrue; eauto.
 Qed.
 Hint Resolve skewLinkHeap.
@@ -1087,7 +1112,109 @@ Proof with auto.
   apply insHeap; auto.
 Qed.
 
-Definition PTP x := rankP x /\ minHeap x.
+Lemma getMinTHeap :
+  forall x xs,
+    minHeap x ->
+    All minHeap xs ->
+    forall y z, (y,z) = getMin x xs ->
+      minHeap y.
+Proof.
+  intros x xs;
+    generalize dependent x;
+      induction xs;
+        simpl; intros.
+  inversion_clear H1; subst; auto.
+  remember (getMin a xs) as tts; destruct tts; subst.
+  remember (LEQ (root x) (root p)) as xp; destruct xp.
+  inversion_clear H1; subst. auto.
+  inversion_clear H1; subst.
+  inversion_clear H0; subst.
+  eapply IHxs; eauto. 
+Qed.
+
+Lemma getMinQHeap :
+  forall x xs,
+    minHeap x ->
+    All minHeap xs ->
+    forall y z, (y,z) = getMin x xs ->
+      All minHeap z.
+Proof.
+  intros x xs;
+    generalize dependent x;
+      induction xs; simpl; intros.
+  inversion_clear H1; subst; eauto.
+  remember (getMin a xs) as tts; destruct tts.
+  remember (LEQ (root x) (root p)) as xp; destruct xp;
+    inversion_clear H1; subst; eauto.
+  inversion_clear H0; subst.
+  apply Cons; eauto.
+Qed.
+
+Lemma splitHeap :
+  forall a, All minHeap a ->
+    forall b c, All minHeap c ->
+      forall y z, (y,z) = split a b c ->
+        All minHeap y.
+Proof.
+  intros a AA b c.
+  generalize dependent a;
+    generalize dependent b.
+  induction c; simpl; intros.
+  inversion_clear H0; subst; auto.
+  destruct a as [i j k]; destruct j; simpl in *.
+  eapply IHc. Focus 3. eauto.
+  auto. inversion_clear H; subst; auto.
+  inversion_clear H; subst.
+  eapply IHc. Focus 3. eauto.
+  auto. auto.
+Qed.
+
+
+Lemma childrenHeap :
+  forall v i c,
+    minHeap (Node v i c) ->
+    All minHeap c.
+Proof.
+  intros v i c;
+    generalize dependent v; 
+      generalize dependent i; 
+        induction c;
+          simpl; intros.
+  auto.
+  inversion_clear H; subst.
+  apply Cons.
+  inversion_clear H2; subst; auto.
+  eapply top. eauto. auto. eauto.
+  eapply IHc. eauto.
+Qed.
+
+Lemma preDeleteMinHeap :
+  forall x,
+    All minHeap x ->
+    All minHeap (preDeleteMin x).
+Proof.
+  intros x.
+  induction x; simpl; intros.
+  eauto.
+  inversion_clear H; subst.
+  remember (getMin a x) as pt; destruct pt as [p t].
+  destruct p as [zz zzz c].
+  remember (split [] [] c) as pq; destruct pq as [p q].
+  assert (All minHeap p). eapply splitHeap.
+  Focus 3. eauto. auto.
+  assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
+  Focus 3. eauto. auto. auto.
+  eapply childrenHeap. eauto.
+  assert (All minHeap t). eapply getMinQHeap. Focus 3. eauto.
+  auto. auto.
+
+  clear Heqpq.
+  
+  induction q. simpl.
+  apply preMeldHeap; auto.
+  simpl.
+  apply preInsertHeap; auto.
+Qed.
 
 Definition PQP x := skewBinaryRank x /\ All minHeap x.
 
@@ -1098,69 +1225,31 @@ Next Obligation.
   split; constructor.
 Qed.
 
-Lemma preInsertType :
-  forall x ys,
-    PQP ys ->
-    PQP (preInsert x ys).
-Proof with auto.
-  intros x ys P.
-  destruct P as [R M].
+Program Definition insert : A -> PQ -> PQ := preInsert.
+Next Obligation.
+  destruct x0.
+  destruct p.
   split.
-  apply preInsertRank; auto.
-  apply preInsertHeap; auto.
+  simpl.
+  apply preInsertRank. assumption.
+  simpl. apply preInsertHeap. assumption.
 Qed.
 
-Lemma preMeldType :
-  forall x y,
-    PQP x ->
-    PQP y ->
-    PQP (preMeld x y).
-Proof with auto.
-  intros x y X Y.
-  destruct X as [xR xH].
-  destruct Y as [yR yH].
-  split.
+Program Definition findMin : PQ -> option A := preFindMin.
+
+Program Definition meld : PQ -> PQ -> PQ := preMeld.
+Next Obligation.
+  destruct x; destruct x0.
+  destruct p; destruct p0; split; simpl.
   apply preMeldRank; auto.
   apply preMeldHeap; auto.
 Qed.
 
+Program Definition deleteMin : PQ -> PQ := preDeleteMin.
+Next Obligation.
+  destruct x. destruct p; split; simpl.
+  apply deleteMinRank; auto.
+  apply preDeleteMinHeap; auto.
+Qed.
+
 End SkewBinaryHeap.
-
-(*
-Fixpoint skewSize x :=
-  match x with
-    | Node v _ r => S (fold_right plus 0 (map skewSize r))
-  end.
-
-Lemma skewSizePos :
-  forall x, skewSize x > 0.
-Proof.
-  intros x; destruct x; simpl; omega.
-Qed.
-
-Lemma splitSplit :
-  forall a b b' c h t i s,
-    (h,t) = split a b c ->
-      (i,s) = split a b' c ->
-        h = i.
-Proof.
-  intros a b b' c.
-  generalize dependent a;
-      generalize dependent b;
-          generalize dependent b'.
-  induction c.
-  simpl.
-  intros. inversion H; inversion H0; auto.
-  simpl. destruct (rank a).
-  intros. eapply IHc; eauto.
-  intros. eapply IHc; eauto.
-Qed.
-
-(*
-Lemma splitSuffix:
-  forall a b b' c h t i s,
-    (h,t) = split a b c ->
-      (i,s) = split a b' c ->
-        h = i.
-*)
-*)
