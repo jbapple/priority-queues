@@ -37,3 +37,6 @@ Ltac Case name := Case_aux case name.
 Ltac SCase name := Case_aux subcase name.
 Ltac SSCase name := Case_aux subsubcase name.
 Ltac SSSCase name := Case_aux subsubsubcase name.
+Ltac S4Case name := Case_aux s4case name.
+Ltac S5Case name := Case_aux s5case name.
+Ltac S6Case name := Case_aux s6case name.
