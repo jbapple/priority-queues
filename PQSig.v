@@ -1,3 +1,5 @@
+Set Implicit Arguments.
+
 Require Export OrderSig.
 
 Module Type PQSig.
@@ -17,16 +19,17 @@ Module Type PQSig.
 
 End PQSig.
 
-Definition DER a leq:= 
-  {der : a -> a -> bool |
-    (forall x y, true = der x y -> 
-      ~(true = leq x y /\ true = leq y x))
-    /\ (forall x, der x x = true)
-    /\ (forall x y, der x y = der y x)
-    /\ (forall x y z, 
-      true = der x y ->
-      true = der y z ->
-      true = der x z)}.
+Definition DERP a leq (der:a -> a -> bool) := 
+  (forall x y, true = der x y -> 
+    ~(true = leq x y /\ true = leq y x))
+  /\ (forall x, der x x = true)
+  /\ (forall x y, der x y = der y x)
+  /\ (forall x y z, 
+    true = der x y ->
+    true = der y z ->
+    true = der x z).
+
+Definition DER a leq := {der | @DERP a leq der}.
 
 Module Type PQVerify.
 
@@ -34,11 +37,9 @@ Module Type PQVerify.
 
   Export PQS.
 
-  Definition SAME := DER A LEQ.
+  Parameter count : DER LEQ -> A -> PQ -> nat.
 
-  Parameter count : SAME -> A -> PQ -> nat.
-
-  Definition check (same:SAME) x y := 
+  Definition check (same:DER LEQ) x y := 
     match same with
       | exist f _ => f x y
     end.
