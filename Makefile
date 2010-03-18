@@ -2,7 +2,7 @@ COQC=coqc -opt
 
 .PHONY: all
 
-all: skewBinaryHeap.vo
+all: SkewBinHeapVerify.vo
 
 PQSig.vo: PQSig.v OrderSig.vo
 	$(COQC) PQSig.v
@@ -15,3 +15,6 @@ caseTactic.vo: caseTactic.v
 
 skewBinaryHeap.vo: skewBinaryHeap.v PQSig.vo caseTactic.vo
 	$(COQC) skewBinaryHeap.v
+
+SkewBinHeapVerify.vo: SkewBinHeapVerify.v skewBinaryHeap.vo caseTactic.vo
+	$(COQC) SkewBinHeapVerify.v
