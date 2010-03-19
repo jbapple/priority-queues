@@ -19,9 +19,11 @@ Module Type PQSig.
 
 End PQSig.
 
-Definition DERP a leq (der:a -> a -> bool) := 
+Definition DERP a (leq:a -> a -> bool) (der:a -> a -> bool) := 
   (forall x y, true = der x y -> 
-    ~(true = leq x y /\ true = leq y x))
+    ((forall z, leq x z = leq y z)
+      /\
+      (forall z, leq z x = leq z y)))
   /\ (forall x, der x x = true)
   /\ (forall x y, der x y = der y x)
   /\ (forall x y z, 
