@@ -55,13 +55,12 @@ Module Type PQVerify.
     forall same x, count same x empty = 0.
 
   Parameter insertCount :
-    forall same x inp,
+    forall same x inp y,
+      count same x (insert y inp) =
       let oldCount := count same x inp in
-        forall y,
-          count same x (insert y inp) =
-          if check same x y 
-            then S oldCount
-            else oldCount.
+        if check same x y 
+          then S oldCount
+          else oldCount.
 
   Parameter findMinCount :
     forall inp,

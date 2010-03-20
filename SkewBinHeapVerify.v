@@ -127,6 +127,54 @@ Proof.
   destruct same; simpl; auto.
 Qed.
 
+
+Lemma preInsertCount :
+  forall f x p y,
+    preCount f x (preInsert y p) =
+    (let old := preCount f x p in
+      if f x y
+        then S old 
+        else old).
+Proof.
+  intros.
+  destruct p.
+  simpl.
+  unfold preCount.
+  remember (f x y) as fxy; destruct fxy; simpl.
+  rewrite <- Heqfxy; auto.
+  rewrite <- Heqfxy; auto.
+  unfold preCount.
+  unfold preInsert.
+  destruct p0.
+  simpl.
+  remember (f x y) as fxy; destruct fxy; simpl; auto.
+  simpl.
+  destruct p; destruct p0; simpl.
+  remember (beq_nat n n0) as nn0; destruct nn0; simpl; auto; try omega;
+  remember (LEQ y a) as ya; destruct ya; simpl; auto; try omega;
+  remember (LEQ y a0) as ya0; destruct ya0; simpl; auto; try omega;
+  remember (LEQ a a0) as aa0; destruct aa0; simpl; auto; try omega;
+  remember (f x y) as xy; destruct xy; simpl; auto; try omega;
+  remember (f x a) as xa; destruct xa; simpl; auto; try omega;
+  remember (f x a0) as xa0; destruct xa0; simpl; auto; try omega.
+Qed.
+
+
+Lemma insertCount :
+  forall same x inp y,
+    count same x (insert y inp) =
+    let oldCount := count same x inp in
+      if check same x y 
+        then S oldCount
+        else oldCount.
+Proof.
+  intros.
+  destruct same; destruct inp.
+  unfold count; simpl.
+  apply preInsertCount.
+Qed.
+
+(*
 Lemma insertCount :
   forall same x inp,
     let oldCount := count same x inp in
@@ -155,6 +203,7 @@ Proof.
   remember (x1 x a) as xa; destruct xa; simpl; auto; try omega;
   remember (x1 x a0) as xa0; destruct xa0; simpl; auto; try omega.
 Qed.
+*)
 
 Lemma minHeapCount :
   forall x, 
@@ -425,7 +474,6 @@ Lemma meldUniqCount :
     = preCount f x p 
     + preCount f x q.
 Proof.
-  Check meldUniq_ind.
   pose (fun (xy:preQ*preQ) r =>
     let (x,y) := xy in
       forall z f,
@@ -461,29 +509,24 @@ Proof.
   eapply IHxs. eauto.
 Qed.
   
-
-Lemma meldCount :
-  forall same inp inq x,
-    count same x (meld inp inq) = count same x inp
-                                + count same x inq.
+Lemma preMeldCount :
+  forall f p q x,
+    preCount f x (preMeld p q) 
+    = preCount f x p
+    + preCount f x q.
 Proof.
   intros.
-  unfold meld.
-  unfold count; simpl.
-  destruct same.
-  destruct inp; destruct inq.
-  simpl.
   unfold preMeld.
   unfold uniqify.
-  destruct x1; destruct x2; simpl.
+  destruct p; destruct q; simpl.
   rewrite meldUniq_equation; auto.
   rewrite meldUniq_equation. rewrite insCount; unfold preCount; simpl.
   auto.
   rewrite meldUniq_equation.
-  remember (ins p1 x1) as px; destruct px.
-  assert False as f.
+  remember (ins p p0) as px; destruct px.
+  assert False as ff.
   eapply insNotNil. eauto.
-  inversion f.
+  inversion ff.
   rewrite Heqpx.
   rewrite insCount.
   unfold preCount; simpl; auto.
@@ -493,7 +536,158 @@ Proof.
   unfold preCount; simpl; omega.
 Qed.
 
-Parameter deleteMinCount :
+Lemma meldCount :
+  forall same inp inq x,
+    count same x (meld inp inq) = count same x inp
+                                + count same x inq.
+Proof.
+  intros; destruct same; destruct inp; destruct inq;
+    unfold count; unfold meld; simpl.
+  apply preMeldCount.
+Qed.
+
+Lemma getFindMin :
+  forall xs x y z, 
+    (y,z) = getMin x xs ->
+    root y = preFindMinHelp x xs.
+Proof.
+  induction xs; simpl; intros.
+  inversion H; subst; auto.
+  remember (getMin a xs) as gaxs; destruct gaxs.
+  assert (root p = preFindMinHelp a xs). eapply IHxs. eauto.
+  rewrite <- H0.
+  remember (LEQ (root x) (root p)) as xp; destruct xp.
+  inversion H; auto.
+  inversion H; auto.
+Qed.
+
+Lemma getMinCount :
+  forall xs x y z,
+    (y,z) = getMin x xs ->
+    forall f a,
+      countTree f a x + preCount f a xs =
+      countTree f a y + preCount f a z.
+Proof.
+  induction xs; simpl; intros.
+  inversion_clear H; subst. auto.
+  remember (getMin a xs) as tts; destruct tts.
+  remember (LEQ (root x) (root p)) as xp; destruct xp;
+    inversion_clear H; subst; unfold preCount; simpl.
+  auto.
+  pose (IHxs _ _ _ Heqtts) as I.
+  unfold preCount in I.
+  rewrite I. omega.
+Qed.
+  
+Fixpoint countList (f:A -> A -> bool) x l :=
+  match l with
+    | [] => 0
+    | y::ys =>
+      if f x y
+        then S (countList f x ys)
+        else countList f x ys
+  end.
+
+Lemma splitCount :
+  forall c, 
+    All rankP c ->
+    forall a b d e, 
+      (d,e) = split a b c ->
+        forall f x,
+          preCount f x d +
+          countList f x e =
+          preCount f x a +
+          countList f x b +
+          preCount f x c.
+Proof.
+  induction c; simpl; intros.
+  inversion_clear H0; subst.
+  unfold preCount at 3.
+  simpl. auto.
+  destruct a; simpl in H0.
+  destruct n.
+  inversion_clear H; subst.
+  pose (IHc H2 _ _ _ _ H0) as I.
+  rewrite I.
+  unfold rankP in H1.
+  simpl in H1.
+  inversion H1; subst.
+  simpl in H1.
+  unfold countList at 1.
+  fold (countList f x b).
+  unfold preCount at 4.
+  simpl.
+  remember (f x a) as xa; destruct xa; try omega.
+  unfold preCount at 2. omega.
+  unfold preCount at 2. omega.
+  inversion_clear H; subst.
+  pose (IHc H2 _ _ _ _ H0) as I.
+  rewrite I.
+  unfold preCount at 1.
+  simpl.
+  unfold preCount at 3.
+  simpl.
+  remember (f x a) as xa; destruct xa; try omega.
+  unfold preCount; simpl; omega.
+  unfold preCount; simpl; omega.
+Qed.
+
+Lemma foldInsertCount :
+  forall l f x q,
+    preCount f x (fold_right preInsert q l)
+    = preCount f x q
+    + countList f x l.
+Proof.
+  induction l; intros; simpl.
+  auto.
+  rewrite preInsertCount.
+  simpl.
+  rewrite IHl.
+  remember (f x a) as fxa; destruct fxa; auto.
+Qed.
+
+Lemma rankChildren :
+  forall n v c,
+    rankP (Node v n c) ->
+    All rankP c.
+Proof.
+  induction n; unfold rankP; simpl; intros.
+  inversion_clear H; subst; simpl; auto.
+  inversion H; subst.
+  apply Cons. destruct y. simpl.
+  inversion H; subst.
+  assert (n0 = n). eapply rankDestruct. eauto.
+  subst. auto.
+  assert (n0 = n). eapply rankDestruct. eauto.
+  subst. auto.
+  auto.
+  fold rankP.
+  eapply IHn.
+  eauto.
+  fold rankP.
+  destruct x; destruct z.
+  assert (n0 = n). eapply rankDestruct. eauto.
+  subst. 
+  assert (n1 = n). eapply rankDestruct. eauto.
+  subst. 
+  repeat (apply Cons); unfold rankP; simpl; auto.
+  inversion H; subst.
+  apply Cons. auto.
+  eapply IHn; auto. eauto.
+  repeat (apply Cons).
+  auto.
+  destruct y.
+  assert (n0 = n). eapply rankDestruct. eauto.
+  subst. auto.
+  auto.
+  apply Cons. auto.
+  apply Cons. destruct y.
+  assert (n0 = n). eapply rankDestruct. eauto.
+  subst. auto.
+  eapply IHn. eauto.
+Qed.
+
+Lemma deleteMinCount :
   forall inp,
     match findMin inp with
       | None => forall same x, count same x (deleteMin inp) = 0
@@ -505,5 +699,70 @@ Parameter deleteMinCount :
               then S newCount
               else newCount
     end.
+Proof.
+  intros p.
+  destruct p.
+  unfold findMin; simpl.
+  destruct x; unfold preFindMin.
+  simpl; intros.
+  unfold count. destruct same; simpl.
+  unfold preCount; simpl. auto.
+  remember (getMin p0 x) as pox; destruct pox.  
+  destruct p1; simpl.
+  remember (split [] [] l0) as sl; destruct sl.
+  unfold deleteMin.
+  unfold preDeleteMin. simpl.
+  erewrite <- getFindMin. Focus 2. eauto.
+  simpl. unfold count; simpl.
+  intros.
+  destruct same.
+  unfold check; simpl.
+  unfold preCount. simpl.
+  rewrite <- Heqpox.
+  rewrite <- Heqsl.
+  
+  simpl.
+  pose foldInsertCount as fic.
+  unfold preCount in fic.
+  rewrite fic.
+  pose preMeldCount as pmc.
+  unfold preCount in pmc.
+  rewrite pmc.
+  remember (x0 y a) as ya; destruct ya.
+  pose (getMinCount _ _ Heqpox) as gmc. 
+  unfold preCount in gmc.
+  rewrite gmc. 
+  pose Heqpox as oth.
+  apply getMinTRank in oth.
+  assert (All rankP l0) as J.
+  eapply rankChildren.
+  eapply getMinTRank. Focus 2. eauto.
+  destruct p; auto.
+  pose (splitCount J _ _ Heqsl) as sc.
+  simpl in sc.
+  unfold countTree at 1.
+  fold countTree. simpl.
+  unfold preCount in sc.
+  rewrite <- sc.
+  rewrite <- Heqya. omega.
+  destruct p; auto.
+  pose (getMinCount _ _ Heqpox) as gmc. 
+  unfold preCount in gmc.
+  rewrite gmc. 
+  pose Heqpox as oth.
+  apply getMinTRank in oth.
+  assert (All rankP l0) as J.
+  eapply rankChildren.
+  eapply getMinTRank. Focus 2. eauto.
+  destruct p; auto.
+  pose (splitCount J _ _ Heqsl) as sc.
+  simpl in sc.
+  unfold countTree at 1.
+  fold countTree. simpl.
+  unfold preCount in sc.
+  rewrite <- sc.
+  rewrite <- Heqya. omega.
+  destruct p; auto.
+Qed.
 
 End SkewBinHeapVerify.
