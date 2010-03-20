@@ -765,4 +765,53 @@ Proof.
   destruct p; auto.
 Qed.
 
+Lemma extractMinCount :
+  forall inp,
+    match findMin inp with
+      | None => None = extractMin inp
+      | Some x => exists z,
+        Some (x,z) = extractMin inp
+        /\ forall same y,
+          count same y z = count same y (deleteMin inp)
+    end.
+Proof.
+  intros p.
+  destruct p.
+  unfold findMin.
+  simpl. fold (extractMin (exist _ x p)).
+  destruct x; unfold preFindMin.
+  unfold extractMin. simpl. auto.
+  remember (extractMin (exist PQP (p0::x) p)) as pppp.
+  destruct pppp.
+  destruct p1.
+  exists p1.
+  split.
+  destruct p1.
+  eapply extractMin_equality in Heqpppp.
+  f_equal.
+  unfold preExtractMin in Heqpppp.
+  remember (getMin p0 x) as pox; destruct pox. 
+  destruct p2.
+  apply getFindMin in Heqpox.
+  simpl in Heqpox.
+  rewrite <- Heqpox. 
+  inversion Heqpppp.
+  auto.
+  destruct p1.
+  eapply extractMin_equality in Heqpppp.
+  unfold count; simpl.
+  intros.
+  destruct same.
+  unfold preExtractMin in Heqpppp.
+  remember (getMin p0 x) as pox; destruct pox.
+  destruct p2.
+  inversion Heqpppp. 
+  auto.
+  apply extractMin_none in Heqpppp.
+  unfold extractMin in Heqpppp.
+  unfold preExtractMin in Heqpppp.
+  simpl in Heqpppp.
+  inversion Heqpppp.
+Qed.
+
 End SkewBinHeapVerify.

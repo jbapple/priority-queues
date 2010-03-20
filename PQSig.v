@@ -14,6 +14,7 @@ Module Type PQSig.
 
   Parameter insert: A -> PQ -> PQ.
   Parameter findMin : PQ -> option A.
+  Parameter extractMin : PQ -> option (A*PQ).
   Parameter deleteMin : PQ -> PQ.
   Parameter meld : PQ -> PQ -> PQ.
 
@@ -72,6 +73,16 @@ Module Type PQVerify.
               then count same y inp > 0
               else count same y inp > 0 ->
                 LEQ x y = true
+      end.
+
+  Parameter extractMinCount :
+    forall inp,
+      match findMin inp with
+        | None => None = extractMin inp
+        | Some x => exists z,
+          Some (x,z) = extractMin inp
+          /\ forall same y,
+            count same y z = count same y (deleteMin inp)
       end.
 
   Parameter deleteMinCount :

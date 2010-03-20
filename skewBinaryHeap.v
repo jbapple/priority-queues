@@ -15,6 +15,8 @@ Require Export Recdef.
 Require Export Coq.Program.Wf.
 Require Export caseTactic.
 
+(* TODO: stability *)
+
 Inductive preT  :=
   Node : A -> nat -> list preT -> preT.
 
@@ -158,6 +160,18 @@ Definition preDeleteMin x :=
             fold_right preInsert (preMeld t p) q
       end
   end.
+
+Definition preExtractMin x :=
+  match x with
+    | [] => None
+    | y::ys => Some
+      match getMin y ys with
+        | (Node v _ c,t) => (v,
+          let (p,q) := split [] [] c in
+            fold_right preInsert (preMeld t p) q)
+      end
+  end.
+
 
 (*
 Extraction preDeleteMin.
@@ -954,6 +968,36 @@ Proof.
   apply preInsertRank; auto.
 Qed.
 
+
+Lemma extractMinRank :
+  forall x,
+    skewBinaryRank x ->
+    forall t u,
+      Some (t,u) = preExtractMin x ->
+      skewBinaryRank u.
+Proof.
+  intros x S t u T.
+  unfold preExtractMin in *.
+  destruct x; eauto. inversion T.
+  remember (getMin p x) as yz. destruct yz as [y z].
+  destruct y as [a b c].
+  remember (split [] [] c) as rs.
+  destruct rs as [r s].
+  assert (skewBinaryRank r) as ss.
+  eapply splitRank. Focus 2. eauto.
+  eapply getMinTRank. Focus 2. eauto. auto.
+  assert (skewBinaryRank z) as zz.
+  eapply getMinQRank. Focus 2. eauto. auto.
+  assert (skewBinaryRank (preMeld z r)).
+  eapply preMeldRank; auto.
+  inversion_clear T; subst.
+  clear Heqrs.
+  induction s.
+  simpl; auto.
+  simpl.
+  apply preInsertRank; auto.
+Qed.
+
 Inductive minHeap : preT -> Prop :=
   lone : forall v n, minHeap (Node v n [])
 | top : forall v n n' w m m' p ys,
@@ -1216,6 +1260,37 @@ Proof.
   apply preInsertHeap; auto.
 Qed.
 
+Lemma preExtractMinHeap :
+  forall x,
+    All minHeap x ->
+    forall y z,
+      Some (y,z) = preExtractMin x ->
+      All minHeap z.
+Proof.
+  intros x.
+  induction x; simpl; intros.
+  inversion H0.
+  inversion_clear H; subst.
+  remember (getMin a x) as pt; destruct pt as [p t].
+  destruct p as [zz zzz c].
+  remember (split [] [] c) as pq; destruct pq as [p q].
+  assert (All minHeap p). eapply splitHeap.
+  Focus 3. eauto. auto.
+  assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
+  Focus 3. eauto. auto. auto.
+  eapply childrenHeap. eauto.
+  inversion_clear H0; subst.
+  assert (All minHeap t). eapply getMinQHeap. Focus 3. eauto.
+  auto. auto.
+
+  clear Heqpq.
+  
+  induction q. simpl.
+  apply preMeldHeap; auto.
+  simpl.
+  apply preInsertHeap; auto.
+Qed.
+
 Definition PQP x := skewBinaryRank x /\ All minHeap x.
 
 Definition PQ := { x:preQ | PQP x}.
@@ -1251,5 +1326,113 @@ Next Obligation.
   apply deleteMinRank; auto.
   apply preDeleteMinHeap; auto.
 Qed.
+
+(*
+Program Definition extractMin (x:PQ) : option (A*PQ) :=
+  match preExtractMin x with
+    | None => None
+    | Some (y,z) => Some (y,z)
+  end.
+Next Obligation.
+  destruct x. destruct p; split; simpl.
+  eapply extractMinRank; eauto.
+  eapply preExtractMinHeap; eauto.
+Qed.
+*)
+
+(*
+Print extractMin.
+
+Locate "_ = _".
+Print eq.
+*)
+
+
+Definition extractMin (x:PQ) : option (A*PQ).
+refine (fun x =>
+  match x with
+    | exist x' xp =>
+      match preExtractMin x' as j return ((j=preExtractMin x') -> option (A*PQ)) with
+        | None => fun _ => None
+        | Some (y,z) => fun s => Some (y,(@exist _ _ z _))
+      end eq_refl
+  end).
+  destruct xp as [R M].
+  split.
+  eapply extractMinRank; eauto.
+  eapply preExtractMinHeap; eauto.
+Defined.
+
+Lemma extractMin_equality :
+  forall x px y z pz,
+    Some (y,exist _ z pz) = extractMin (exist _ x px) ->
+    Some (y,z) = preExtractMin x.
+Proof.
+  intros.
+  generalize dependent H. 
+  remember (preExtractMin x) as pemx.
+  unfold extractMin.  
+(*  generalize dependent Heqpemx.*)
+  assert (forall (zz:option(A*preQ)) (pp:zz= preExtractMin x),
+    Some (y, exist (fun x0 : preQ => PQP x0) z pz) =
+    match
+      zz as j return (j = preExtractMin x -> option (A * PQ))
+      with
+      | Some p =>
+        let (y0, z0) as p0
+          return (Some p0 = preExtractMin x -> option (A * PQ)) := p in
+          fun s : Some (y0, z0) = preExtractMin x =>
+            Some
+            (y0,
+              exist (fun x0 : preQ => PQP x0) z0
+              match px with
+                | conj R M => conj (extractMinRank R s) (preExtractMinHeap M s)
+              end)
+      | None => fun _ : None = preExtractMin x => None
+   end pp -> Some (y, z) = pemx) as P.
+  intros.
+  destruct zz.
+  destruct p.
+  inversion_clear H; subst. auto.
+  inversion H.
+  pose (P (preExtractMin x) eq_refl) as Q.
+  apply Q.
+Qed.
+
+Lemma extractMin_none :
+  forall x px,
+    None = extractMin (exist _ x px) ->
+    None = preExtractMin x.
+Proof.
+  intros.
+  generalize dependent H. 
+  remember (preExtractMin x) as pemx.
+  unfold extractMin.  
+(*  generalize dependent Heqpemx.*)
+  assert (forall (zz:option(A*preQ)) (pp:zz= preExtractMin x),
+    None =
+    match
+      zz as j return (j = preExtractMin x -> option (A * PQ))
+      with
+      | Some p =>
+        let (y0, z0) as p0
+          return (Some p0 = preExtractMin x -> option (A * PQ)) := p in
+          fun s : Some (y0, z0) = preExtractMin x =>
+            Some
+            (y0,
+              exist (fun x0 : preQ => PQP x0) z0
+              match px with
+                | conj R M => conj (extractMinRank R s) (preExtractMinHeap M s)
+              end)
+      | None => fun _ : None = preExtractMin x => None
+   end pp -> None = pemx) as P. Focus 2.
+  eapply P.
+  intros.
+  destruct zz.
+  destruct p.
+  inversion_clear H; subst.
+  rewrite Heqpemx. auto.
+Qed.
+  
 
 End SkewBinaryHeap.
