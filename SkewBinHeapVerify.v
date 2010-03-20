@@ -94,9 +94,13 @@ Proof.
   omega.
 Qed.
 
+Definition preCount f x l :=
+  fold_right plus 0 (map (countTree f x) l).
+Hint Unfold preCount.
+
 Definition count (same:DER LEQ) x (l:PQ) :=
   match same, l with
-    | exist f _, exist v _ => fold_right plus 0 (map (countTree f x) v)
+    | exist f _, exist v _ => preCount f x v
   end.
 
 Lemma countSAME :
@@ -109,7 +113,7 @@ Proof.
   destruct inp; simpl in *.
   clear p; induction x1.
   simpl. auto.
-  simpl.
+  unfold preCount in *. simpl.
   erewrite countTreeSAME. Focus 3. eauto.
   omega. auto.
 Qed.
@@ -135,7 +139,7 @@ Proof.
   intros.
   destruct inp.
   destruct same.
-  simpl in *.
+  simpl in *. unfold preCount in *; simpl in *.
   unfold preInsert. simpl.
   destruct x0; simpl in *.
   destruct (x1 x y); auto.
@@ -380,6 +384,115 @@ Proof.
   inversion a; subst. auto.
 Qed.
 
+Lemma linkCount :
+  forall f x p q,
+    countTree f x (link p q) 
+    = countTree f x p
+    + countTree f x q.
+Proof.
+  intros; unfold link.
+  destruct p; destruct q.
+  remember (LEQ a a0) as aa0; destruct aa0; simpl; auto.
+  remember (f x a) as xa; destruct xa;
+    remember (f x a0) as xa0; destruct xa0;
+      simpl; auto; try omega.
+  remember (f x a) as xa; destruct xa;
+    remember (f x a0) as xa0; destruct xa0;
+      simpl; auto; try omega.
+Qed.
+
+Lemma insCount :
+  forall f x p ps,
+    preCount f x (ins p ps) 
+    = countTree f x p 
+    + preCount f x ps.
+Proof.
+  intros f x p ps.
+  generalize dependent p.
+  induction ps; simpl; auto.
+  intros.
+  remember (nat_compare (rank p) (rank a)) as pa; destruct pa.
+  rewrite IHps.
+  rewrite linkCount. unfold preCount; simpl; omega.
+  unfold preCount; simpl; omega.
+  rewrite IHps.
+  rewrite linkCount. unfold preCount; simpl; omega.
+Qed.
+
+Lemma meldUniqCount :
+  forall p q x f,
+    preCount f x (meldUniq (p,q)) 
+    = preCount f x p 
+    + preCount f x q.
+Proof.
+  Check meldUniq_ind.
+  pose (fun (xy:preQ*preQ) r =>
+    let (x,y) := xy in
+      forall z f,
+        preCount f z r
+        = preCount f z x 
+        + preCount f z y) as P.
+  assert (forall xy, P xy (meldUniq xy)) as ans.
+  eapply meldUniq_ind; unfold P; clear P; simpl; intros; auto.
+  unfold preCount in *; simpl in *.
+  rewrite H.
+  omega.
+  unfold preCount in *; simpl in *.
+  rewrite H.
+  omega.
+  rewrite insCount.
+  rewrite H.
+  rewrite linkCount.
+  unfold preCount; simpl; omega.
+  unfold P in ans; clear P; intros.
+  eapply (ans (p,q)).
+Qed.
+
+Lemma insNotNil :
+  forall x xs,
+    ins x xs <> [].
+Proof.
+  unfold not; intros; generalize dependent x; induction xs; intros.
+  simpl in H. inversion H.
+  simpl in H.
+  remember (nat_compare (rank x) (rank a)) as xa; destruct xa.
+  eapply IHxs. eauto.
+  inversion H.
+  eapply IHxs. eauto.
+Qed.
+  
+
+Lemma meldCount :
+  forall same inp inq x,
+    count same x (meld inp inq) = count same x inp
+                                + count same x inq.
+Proof.
+  intros.
+  unfold meld.
+  unfold count; simpl.
+  destruct same.
+  destruct inp; destruct inq.
+  simpl.
+  unfold preMeld.
+  unfold uniqify.
+  destruct x1; destruct x2; simpl.
+  rewrite meldUniq_equation; auto.
+  rewrite meldUniq_equation. rewrite insCount; unfold preCount; simpl.
+  auto.
+  rewrite meldUniq_equation.
+  remember (ins p1 x1) as px; destruct px.
+  assert False as f.
+  eapply insNotNil. eauto.
+  inversion f.
+  rewrite Heqpx.
+  rewrite insCount.
+  unfold preCount; simpl; auto.
+  rewrite meldUniqCount.
+  rewrite insCount.
+  rewrite insCount.
+  unfold preCount; simpl; omega.
+Qed.
+
 Parameter deleteMinCount :
   forall inp,
     match findMin inp with
@@ -392,10 +505,5 @@ Parameter deleteMinCount :
               then S newCount
               else newCount
     end.
-
-Parameter meldCount :
-  forall same inp inq x,
-    count same x (meld inp inq) = count same x inp
-    + count same x inq.
 
 End SkewBinHeapVerify.
