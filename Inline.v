@@ -72,14 +72,17 @@ Fixpoint feapT A (leq:A->A->bool) v (x:preT' A) {struct x} : Prop :=
     | Node wc n d =>
       feapR leq v wc
       /\ match wc with
-           | Top w c => feapM leq w d
+           | Top w c => feapM leq (Some w) d
          end
   end
 with feapR A (leq:A->A->bool) v (x:Root A) {struct x} : Prop :=
   match x with
     | Top w c =>
-      true = leq v w
-      /\ feapM leq w c
+      match v with
+        | Some q => true = leq q w
+        | None => True
+      end
+      /\ feapM leq (Some w) c
   end
 with feapM A (leq:A->A->bool) v (x:ml A) {struct x} : Prop :=
   match x with
@@ -1230,11 +1233,19 @@ Hint Unfold minHeap.
 Hint Unfold rootHeap.
 Hint Unfold listHeap.
 
+(*
 Lemma Nil : OO.A -> listHeap ($).
 Proof.
   intros x; unfold listHeap.
-  exists x; auto.
+  exists (Some x); auto.
   simpl. auto.
+Qed.
+Hint Resolve Nil.
+*)
+
+Lemma Nil : listHeap ($).
+Proof.
+  exists (@None OO.A). simpl. auto.
 Qed.
 Hint Resolve Nil.
 
@@ -1248,6 +1259,11 @@ Ltac lisp := simpl in *;
     | _ => auto
   end.
 
+
+Set Maximal Implicit Insertion.
+Implicit Arguments None [A].
+Unset Maximal Implicit Insertion.
+
 Lemma Cons : 
   forall xs x, 
     minHeap x ->
@@ -1258,7 +1274,7 @@ Proof.
   induction xs as [|y ys I]; simpl; intros x X XS.
 
   destruct x as [v i c]; destruct v as [r d]; simpl.
-  exists r; repeat (constructor; auto).
+  exists (Some r); repeat (constructor; auto).
   apply OO.leqRefl.
   destruct X as [v X].
   simpl in X. destruct X. destruct H. auto.
@@ -1267,15 +1283,16 @@ Proof.
 
   destruct XS as [v XS]. lisp.
   rename x0 into w.
-
+  
+  destruct v as [v|]; destruct w as [w|].
   remember (OO.LEQ v w) as vw; destruct vw.
 
-  exists v; repeat (constructor; auto).
+  exists (Some v); repeat (constructor; auto).
   destruct x. lisp.
   destruct r; lisp.
   eapply OO.leqTransTrue; eauto.
 
-  exists w; lisp.
+  exists (Some w); lisp.
   destruct y; lisp.
   destruct r; lisp.
   eapply OO.leqTransTrue.
@@ -1298,6 +1315,24 @@ Proof.
   eapply OO.leqTransTrue.
   eapply OO.leqSymm; eauto.
   auto.
+
+  exists (None:option OO.A).
+  lisp; lisp; lisp.
+  destruct y; lisp.
+  destruct r; lisp.
+  generalize dependent H0.
+  clear. generalize dependent v.
+  induction ys; intros; lisp.
+  destruct p; lisp. destruct r; lisp.
+  eapply IHys. eauto.
+
+  exists (None:option OO.A).
+  lisp; lisp; lisp.
+  destruct x; lisp.
+  destruct r; eauto. lisp.
+
+  exists (None:option OO.A).
+  lisp; lisp; lisp.
 Qed.
 Hint Resolve Cons.  
 
@@ -1309,7 +1344,7 @@ Proof.
   unfold rootHeap; unfold minHeap; intros.
   destruct H as [w R].
   destruct v as [x c].
-  exists x.
+  exists (Some x).
   lisp.
   apply OO.leqRefl.
 Qed.
@@ -1323,7 +1358,7 @@ Lemma top : forall v n n' w m m' p ys,
 Proof.
   intros.
   destruct v as [r i c].
-  exists r. lisp.
+  exists (Some r). lisp.
   apply OO.leqRefl.
   destruct i; lisp. 
   destruct w; lisp.
@@ -1357,11 +1392,11 @@ Proof.
     SCase "a <= c".
       lisp. destruct b; destruct c; lisp.
       destruct a; lisp.
-      exists a; lisp.
+      exists (Some a); lisp.
       apply OO.leqRefl.
     SCase "a > c".
       assert (true = LEQ c a). apply leqSymm; auto.
-      destruct c. exists a0.
+      destruct c. exists (Some a0).
       lisp. apply OO.leqRefl.
       destruct a; destruct b; lisp.
       destruct a; auto.
@@ -1373,7 +1408,7 @@ Proof.
     SCase "b <= c".
       destruct c; lisp.
       destruct b; lisp.
-      exists a1; lisp.
+      exists (Some a1); lisp.
       apply OO.leqRefl.
       destruct a; lisp.
       destruct a; auto.
@@ -1381,7 +1416,7 @@ Proof.
       assert (true = LEQ c b). apply leqSymm; auto.
       destruct c; lisp.
       destruct b; lisp.
-      exists a0; lisp.
+      exists (Some a0); lisp.
       apply OO.leqRefl.
       destruct a; lisp.
       eapply OO.leqTransTrue; eauto.
@@ -1665,7 +1700,7 @@ Proof.
   destruct p0; lisp. eauto.
   destruct r; lisp. eauto.
   destruct zz; lisp.
-  exists a1; lisp.
+  exists (Some a1); lisp.
   assert (Each rootHeap q) as eq.
   eapply splitEach. Focus 4. eauto. eauto. simpl. auto.
   assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
@@ -1673,7 +1708,7 @@ Proof.
   destruct c; lisp.
   destruct p0; destruct zz; lisp.
   destruct r; lisp.
-  exists a0; lisp.
+  exists (Some a0); lisp.
     
   clear Heqpq. generalize dependent eq.
 
@@ -1703,9 +1738,6 @@ Proof.
   remember (split ($) [] c) as pq; destruct pq as [p q].
   assert (listHeap p). eapply splitHeap.
   Focus 3. eauto. Show Existentials. auto.
-  eapply Nil.
-  destruct y. auto.
-  eauto. Show Existentials.
   assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
   Focus 3. eauto. lisp. eauto. eauto. lisp. eauto.
   lisp. destruct zz; eauto.
@@ -1734,9 +1766,7 @@ Definition PQ := { x:preQ | PQP x}.
 
 Program Definition empty : PQ := ($).
 Next Obligation.
-  lisp. split. lisp. lisp. lisp. eauto.
-  simpl. unfold listHeap.
-  split; constructor.
+  lisp. split. eauto. eauto.
 Qed.
 
 Program Definition insert : A -> PQ -> PQ := preInsert.
@@ -1746,7 +1776,7 @@ Next Obligation.
   split.
   simpl.
   apply preInsertRank. assumption.
-  simpl. apply preInsertHeap. assumption.
+  simpl. apply preInsertHeap. auto.
 Qed.
 
 Program Definition findMin : PQ -> option A := preFindMin.
