@@ -26,16 +26,18 @@ with ml A :=
 Set Maximal Implicit Insertion.
 Implicit Arguments cil [A].
 Unset Maximal Implicit Insertion.
-Print cil.
+
 Scheme preT'_w := Induction for preT' Sort Prop
 with Root_w := Induction for Root Sort Prop
 with ml_w := Induction for ml Sort Prop.
+
 Set Elimination Schemes.
 
 Notation "[[ x | .. | y ]]" := (nons x .. (nons y cil) ..).
 Notation "a ::: b" := (nons a b) (at level 60, right associativity).
 Notation "$" := cil (at level 60).
 
+(*
 Locate "$".
 Locate "[]".
 Locate "::".
@@ -44,8 +46,96 @@ Print cons.
 Print cil.
 
 Check (let x := Node (Top 1 cil) 0 cil in [[ x | x ]]).
+*)
 
 Combined Scheme all_ind from preT'_w, Root_w, ml_w.
+
+Inductive heapT A (leq:A->A->bool) v : preT' A -> Prop :=
+  theap : forall w c d n,
+          heapR leq v (Top w c) ->
+          heapM leq w d ->
+          heapT leq v (Node (Top w c) n d)
+with heapR A (leq:A->A->bool) v : Root A -> Prop :=
+  rheap : forall w c,
+          true = leq v w ->
+          heapM leq w c ->
+          heapR leq v (Top w c)
+with heapM A (leq:A->A->bool) v : ml A -> Prop :=
+  hcil : heapM leq v cil
+| hnons : forall x xs,
+          heapT leq v x ->
+          heapM leq v xs ->
+          heapM leq v (x:::xs).
+
+Fixpoint feapT A (leq:A->A->bool) v (x:preT' A) {struct x} : Prop :=
+  match x with
+    | Node wc n d =>
+      feapR leq v wc
+      /\ match wc with
+           | Top w c => heapM leq w d
+         end
+  end
+with feapR A (leq:A->A->bool) v (x:Root A) {struct x} : Prop :=
+  match x with
+    | Top w c =>
+      true = leq v w
+      /\ feapM leq w c
+  end
+with feapM A (leq:A->A->bool) v (x:ml A) {struct x} : Prop :=
+  match x with
+    | ($) => True
+    | x:::xs => 
+      feapT leq v x
+      /\ feapM leq v xs
+  end.
+
+(*
+Functional Scheme feapT_ind := Induction for feapT Sort Prop
+with feapR_ind := Induction for feapR Sort Prop
+with feapM_ind := Induction for feapM Sort Prop.
+*)
+
+Function weapT (A:Type) (leq:A->A->bool) (v:A) (x:preT' A) {struct x} : Prop :=
+  match x with
+    | Node wc n d =>
+      weapR leq v wc
+      /\ match wc with
+           | Top w c => weapM leq w d
+         end
+  end
+with weapR (A:Type) (leq:A->A->bool) (v:A) (x:Root A) {struct x} : Prop :=
+  match x with
+    | Top w c =>
+      true = leq v w
+      /\ weapM leq w c
+  end
+with weapM (A:Type) (leq:A->A->bool) (v:A) (x:ml A) {struct x} : Prop :=
+  match x with
+    | ($) => True
+    | x:::xs => 
+      weapT leq v x
+      /\ weapM leq v xs
+  end.
+
+Check weapT_equation.
+
+(*
+Functional Scheme weapT_ind := Induction for weapT Sort Prop.
+*)
+
+Hint Constructors heapT.
+Hint Constructors heapR.
+Hint Constructors heapM.
+
+Set Maximal Implicit Insertion.
+Implicit Arguments hcil [A leq v].
+Unset Maximal Implicit Insertion.
+
+Scheme heapT_w := Induction for heapT Sort Prop
+with heapR_w := Induction for heapR Sort Prop
+with heapM_w := Induction for heapM Sort Prop.
+
+Combined Scheme heap_ind from heapT_w, heapR_w, heapM_w.
 
 Module RootOrd (OO:Order) <: Order.
 
@@ -1105,6 +1195,7 @@ Proof.
   apply preInsertRank; auto.
 Qed.
 
+(*
 Inductive minHeap : preT -> Prop :=
   lone : forall v n, minHeap (Node v n ($))
 | top : forall v n n' w m m' p ys,
@@ -1129,6 +1220,129 @@ Inductive All t (p:t -> Prop) : list t -> Prop :=
          All p xs ->
          All p (x::xs).
 Hint Constructors All.
+*)
+
+Definition minHeap x := exists v, heapT OO.LEQ v x.
+Definition rootHeap x := exists v, heapR OO.LEQ v x.
+Definition listHeap x := exists v, heapM OO.LEQ v x.
+
+Hint Unfold minHeap.
+Hint Unfold rootHeap.
+Hint Unfold listHeap.
+
+Lemma Nil : OO.A -> listHeap ($).
+Proof.
+  intros x; unfold listHeap.
+  exists x; auto.
+Qed.
+Hint Resolve Nil.
+
+Lemma Cons : 
+  forall xs x, 
+    minHeap x ->
+    listHeap xs ->
+    listHeap (x:::xs).
+Proof.
+  induction xs as [|y ys I]; simpl; intros x X XS.
+  unfold listHeap.
+  destruct x as [v i c].
+  destruct v as [r d].
+  exists r; repeat (constructor; auto).
+  apply OO.leqRefl.
+  destruct X as [v X].
+  inversion_clear X; subst.
+  inversion_clear H; subst; auto.
+  destruct X as [v X].
+  inversion_clear X; subst; auto.
+
+  destruct XS as [v XS].
+  unfold listHeap.
+  destruct X as [w X].
+  remember (OO.LEQ v w) as vw; destruct vw.
+
+  exists v; repeat (constructor; auto).
+  destruct x.
+  inversion_clear X; subst; repeat (constructor; auto).
+  inversion_clear H; subst; auto.
+  eapply OO.leqTransTrue; eauto.
+  inversion_clear H; subst; auto.
+
+  exists w; repeat (constructor; auto).
+  inversion_clear XS; subst.
+  destruct y.
+  inversion_clear H; subst;
+    repeat (constructor; auto).
+  inversion_clear H1; subst.
+  eapply OO.leqTransTrue.
+  eapply OO.leqSymm; eauto.
+  auto.
+  inversion_clear H1; subst; auto.
+  inversion_clear XS; subst.
+  clear H I X y x.
+  generalize dependent w.
+  generalize dependent v.
+  induction ys; intros.
+  eauto.
+  inversion_clear H0; subst.
+  constructor; auto.
+  Focus 2. eapply IHys. eauto. eauto.
+  destruct p; inversion_clear H; subst; repeat (constructor; auto).
+  inversion_clear H0; subst.
+  Focus 2.
+  inversion_clear H0; subst; auto.
+  eapply OO.leqTransTrue.
+  eapply OO.leqSymm; eauto.
+  auto.
+Qed.
+Hint Resolve Cons.  
+
+Lemma lone : 
+  forall v n, 
+    rootHeap v ->
+    minHeap (Node v n ($)).
+Proof.
+  unfold rootHeap; unfold minHeap; intros.
+  destruct H as [w R].
+  destruct v as [x c].
+  exists x.
+  constructor; auto.
+  constructor; auto. 
+  apply OO.leqRefl.
+  inversion R; subst. auto.
+Qed.
+Hint Resolve lone.
+
+Lemma top : forall v n n' w m m' p ys,
+  minHeap (Node v n ys) ->
+  true = LEQ v w ->
+  minHeap (Node w m' p) ->
+  minHeap (Node v n' ((Node w m p) ::: ys)).
+Proof.
+  intros.
+  destruct v as [r i c].
+  exists r.
+  inversion H; inversion H1; subst.
+  constructor; auto.
+  inversion H2; subst.
+  inversion H6; subst.
+  constructor; auto. apply OO.leqRefl.
+  constructor; auto.
+  destruct p; destruct w; simpl in *.
+  constructor; auto.
+  inversion H3; subst. 
+  constructor; auto.
+  inversion H6; subst; auto.
+  inversion H3; subst.
+  inversion H9; subst.
+  inversion H6; subst.
+  constructor; auto.
+  destruct ys; auto.
+  inversion H2; subst.
+  inversion H6; subst.
+  inversion H9; subst.
+  constructor; auto.
+Qed.
+Hint Resolve top.
 
 Lemma linkHeap :
   forall x y, minHeap x -> minHeap y -> minHeap (link x y).
@@ -1142,10 +1356,10 @@ Qed.
 Hint Resolve linkHeap.
 
 Lemma skewLinkHeap :
-  forall x y z, minHeap y -> minHeap z -> 
+  forall x y z, rootHeap x -> minHeap y -> minHeap z -> 
     minHeap (skewLink (Node x 0 ($)) y z).
 Proof.
-  intros x y z Y Z.
+  intros x y z X Y Z.
   unfold skewLink.
   rename x into a.
   destruct y as [b j q]; destruct z as [c k r].
@@ -1156,10 +1370,10 @@ Proof.
     SCase "a <= c".
       eapply top with (n:=0); auto. eapply top.
       apply lone with (n := 0). auto.
-      eauto. eauto.
+      eauto. eauto. eauto.
     SCase "a > c".
       assert (true = LEQ c a). apply leqSymm; auto.
-      eapply top with (n:=0).  Focus 3. apply lone with (n := 0).
+      eapply top with (n:=0).  Focus 3. apply lone with (n := 0). auto.
       eapply top. eauto.
       eapply leqTransTrue; eauto. eauto. auto.
   Case "b > a".
@@ -1167,11 +1381,11 @@ Proof.
     remember (LEQ b c) as bc; destruct bc; simpl.
     SCase "b <= c".
       eapply top with (n:=0). Focus 3.
-      eapply lone with (n:= 0). 
+      eapply lone with (n:= 0). auto.
       eapply top; auto. eauto. eauto. auto.
     SCase "b > c".
       assert (true = LEQ c b). apply leqSymm; auto.
-      eapply top with (n:=0). Focus 3. eapply lone with (n:=0).
+      eapply top with (n:=0). Focus 3. eapply lone with (n:=0). auto.
       eapply top; auto. eauto. eauto.
       eapply leqTransTrue; eauto.
 Qed.
@@ -1180,30 +1394,37 @@ Hint Resolve skewLinkHeap.
 Lemma insHeap : 
   forall x xs,
     minHeap x ->
-    Aml minHeap xs ->
-    Aml minHeap (ins x xs).
+    listHeap xs ->
+    listHeap (ins x xs).
 Proof.
   intros x xs.
   generalize dependent x.
   induction xs; intros; auto.
-    simpl; auto.
-    inversion H0; subst.
+    simpl; auto. simpl; auto.
+    inversion H0; subst. inversion H1; subst.
     simpl.
     rename p into a.
     remember (nat_compare (rank x) (rank a)) as xa; destruct xa; auto.
+    apply IHxs; auto. eapply linkHeap; auto.
+    exists x0. auto.
+    exists x0; eauto.
+    eapply IHxs. eapply linkHeap; auto.
+    exists x0. auto.
+    exists x0; eauto.
 Qed.
 
 Lemma preInsertHeap :
   forall x ys,
-    Aml minHeap ys ->
-    Aml minHeap (preInsert x ys).
+    rootHeap x ->
+    listHeap ys ->
+    listHeap (preInsert x ys).
 Proof with auto.
-  intros x ys P.
+  intros x ys P X.
   destruct ys.
   Case "ys = ($)".
     simpl. 
     SCase "Aml minHeap [Node x 0 ($)]".
-      auto.
+      eauto.
   Case "ys = p ::: _".
     unfold preInsert.
     destruct ys.
@@ -1216,61 +1437,87 @@ Proof with auto.
       rename P into M.
       remember (beq_nat (rank p) (rank q)) as pq; destruct pq.
       SSCase "Aml minHeap (skewLink (Node x 0 ($)) p q ::: ys)".
-        constructor.
+        apply Cons.
         apply skewLinkHeap; auto.
-        inversion M; auto.
-        inversion M. inversion H2; auto.
-        inversion M. inversion H2; auto.
+        inversion_clear X; auto.
+        inversion_clear H. exists x0; auto.
+        inversion_clear X; subst.
+        inversion_clear H; subst.
+        inversion_clear H1; subst.
+        eauto. inversion_clear X; subst.
+        inversion_clear H; subst.
+        inversion_clear H1; subst.
+        eauto.
       SSCase "Aml minHeap (Node x 0 ($) ::: p ::: q ::: ys".
-         constructor; auto.
+         apply Cons; auto.
 Qed.
 
 Lemma meldUniqHeap :
   forall x y,
-    Aml minHeap x ->
-    Aml minHeap y ->
-    Aml minHeap (meldUniq (x,y)).
+    listHeap x ->
+    listHeap y ->
+    listHeap (meldUniq (x,y)).
 Proof.
   assert 
     (let P := 
       fun (xy:(preQ*preQ)) r =>
         let (x,y) := xy in
-              Aml minHeap x ->
-              Aml minHeap y ->
-              Aml minHeap r
+              listHeap x ->
+              listHeap y ->
+              listHeap r
               in forall xy, P xy (meldUniq xy)).
   eapply meldUniq_ind; intros; auto.
   inversion H0; subst.
-  constructor; auto.
+  apply Cons; auto. inversion H2; subst; eauto.
   inversion H1; subst.
-  constructor; auto.
-  inversion H1; inversion H0; subst.
-  apply insHeap; auto.
-  intros.
+  apply H; auto.
+  inversion H2; subst; auto.
+  eauto.
+  apply Cons.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H2; subst; eauto.
+  apply H; auto.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H2; subst; eauto.
+  apply insHeap; eauto.
+  eapply linkHeap; eauto.
+  inversion H0; eauto.
+  inversion H2; subst; eauto.
+  inversion H1; eauto.
+  inversion H2; subst; eauto.
+  eapply H.
+  inversion H0; eauto.
+  inversion H2; subst; eauto.
+  inversion H1; eauto.
+  inversion H2; subst; eauto.
   simpl in H.
+  intros x y.
   pose (H (x, y)) as I.
   eapply I; auto.
 Qed.
 
 Lemma preMeldHeap :
   forall x y,
-    Aml minHeap x ->
-    Aml minHeap y ->
-    Aml minHeap (preMeld x y).
+    listHeap x ->
+    listHeap y ->
+    listHeap (preMeld x y).
 Proof with auto.
   intros x y xH yH.
 
   apply meldUniqHeap.
   destruct x; inversion xH; subst; auto.
-  apply insHeap; auto. 
+  apply insHeap; auto. inversion_clear H; subst; eauto.
+  inversion_clear H; subst; eauto.
   destruct y; inversion yH; subst; auto.
   apply insHeap; auto.
+ inversion_clear H; subst; eauto.
+  inversion_clear H; subst; eauto.
 Qed.
 
 Lemma getMinTHeap :
   forall x xs,
     minHeap x ->
-    Aml minHeap xs ->
+    listHeap xs ->
     forall y z, (y,z) = getMin x xs ->
       minHeap y.
 Proof.
@@ -1285,15 +1532,18 @@ Proof.
   inversion_clear H1; subst. auto.
   inversion_clear H1; subst.
   inversion_clear H0; subst.
-  eapply IHxs; eauto. 
+  eapply IHxs. Focus 3.
+  eauto.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H1; subst; eauto.
 Qed.
 
 Lemma getMinQHeap :
   forall x xs,
     minHeap x ->
-    Aml minHeap xs ->
+    listHeap xs ->
     forall y z, (y,z) = getMin x xs ->
-      Aml minHeap z.
+      listHeap z.
 Proof.
   intros x xs;
     generalize dependent x;
@@ -1304,14 +1554,17 @@ Proof.
   remember (LEQ (root x) (root p)) as xp; destruct xp;
     inversion_clear H1; subst; eauto.
   inversion_clear H0; subst.
-  constructor; eauto.
+  apply Cons; eauto. 
+  eapply IHxs. Focus 3. eauto.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H1; subst; eauto.
 Qed.
 
 Lemma splitHeap :
-  forall a, Aml minHeap a ->
-    forall b c, Aml minHeap c ->
+  forall a, listHeap a ->
+    forall b c, listHeap c ->
       forall y z, (y,z) = split a b c ->
-        Aml minHeap y.
+        listHeap y.
 Proof.
   intros a AA b c.
   generalize dependent a;
@@ -1322,17 +1575,53 @@ Proof.
   rename p into a.
   destruct a as [i j k]; destruct j; simpl in *.
   eapply IHc. Focus 3. eauto.
-  auto. inversion_clear H; subst; auto.
+  auto. inversion_clear H; subst; eauto.
+  inversion_clear H1; subst; eauto.
   inversion_clear H; subst.
   eapply IHc. Focus 3. eauto.
-  auto. auto.
+  apply Cons; eauto. inversion_clear H1; subst; eauto.
+  inversion_clear H1; subst; eauto.
 Qed.
 
+Fixpoint Each t (P:t -> Prop) l :=
+  match l with
+    | nil => True
+    | x::xs => P x /\ Each P xs
+  end.
+Hint Unfold Each.
+
+Lemma splitEach :
+  forall a, listHeap a ->
+    forall b, Each rootHeap b -> 
+      forall c, listHeap c ->
+        forall y z, (y,z) = split a b c ->
+          Each rootHeap z.
+Proof.
+  intros a AA b BB c.
+  generalize dependent a;
+    generalize dependent b.
+  induction c; simpl; intros.
+  inversion_clear H0; subst; auto.
+  rename a into aa.
+  rename p into a.
+  destruct a as [i j k]; destruct j; simpl in *.
+  eapply IHc. Focus 4. eauto. simpl. split.
+  auto. inversion_clear H; subst; eauto.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H; subst; eauto. eauto. eauto.
+  auto. inversion_clear H; subst; eauto.
+  inversion_clear H1; subst; eauto.
+  eapply IHc. Focus 4. eauto. eauto.
+  apply Cons; eauto. inversion_clear H; subst; eauto.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H; subst; eauto.
+  inversion_clear H1; subst; eauto.
+Qed.
 
 Lemma childrenHeap :
   forall v i c,
     minHeap (Node v i c) ->
-    Aml minHeap c.
+    listHeap c.
 Proof.
   intros v i c;
     generalize dependent v; 
@@ -1340,17 +1629,23 @@ Proof.
         induction c;
           simpl; intros.
   auto.
-  inversion_clear H; subst.
-  constructor.
-  inversion_clear H2; subst; auto.
-  eapply top. eauto. auto. eauto.
-  eapply IHc. eauto.
+  inversion_clear H; subst. eauto.
+  apply Cons.
+  Show Existentials.
+  inversion_clear H; subst; auto.
+  inversion_clear H0; subst; auto.
+  inversion_clear H1; subst; auto. eauto. Show Existentials.
+  inversion_clear H; subst; auto.
+  inversion_clear H0; subst; auto.
+  inversion_clear H1; subst; auto.
+  Show Existentials.
+  exists w. auto.
 Qed.
 
 Lemma preDeleteMinHeap :
   forall x,
-    Aml minHeap x ->
-    Aml minHeap (preDeleteMin x).
+    listHeap x ->
+    listHeap (preDeleteMin x).
 Proof.
   intros x.
   induction x; simpl; intros.
@@ -1360,52 +1655,95 @@ Proof.
   remember (getMin a x) as pt; destruct pt as [p t].
   destruct p as [zz zzz c].
   remember (split ($) [] c) as pq; destruct pq as [p q].
-  assert (Aml minHeap p). eapply splitHeap.
+  assert (listHeap p). eapply splitHeap.
   Focus 3. eauto. auto.
   assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
-  Focus 3. eauto. auto. auto.
-  eapply childrenHeap. eauto.
-  assert (Aml minHeap t). eapply getMinQHeap. Focus 3. eauto.
-  auto. auto.
+  Focus 3. eauto. 
+  inversion_clear H0; subst; eauto.
+  inversion_clear H0; subst; eauto.
+  inversion_clear H; subst; eauto.
+  inversion_clear H1; subst; eauto.
+  assert (Each rootHeap q) as eq.
+  eapply splitEach. Focus 4. eauto. eauto. simpl. auto.
+  assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
+  Focus 3. eauto. 
+  inversion_clear H0; subst; eauto.
+  inversion_clear H0; subst; eauto.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H2; subst; eauto.
+    
+  clear Heqpq. generalize dependent eq.
 
-  clear Heqpq.
-  
-  induction q. simpl.
+  induction q; intros. simpl.
   apply preMeldHeap; auto.
-  simpl.
-  apply preInsertHeap; auto.
+  eapply getMinQHeap. Focus 3. eauto.
+  inversion_clear H0; subst; eauto.
+  inversion_clear H0; subst; eauto.
+  apply preInsertHeap; auto.  
+  simpl in eq. destruct eq. auto.
+  fold (fold_right preInsert (preMeld t p) q).
+  apply IHq.
+  simpl in eq; destruct eq; auto.
 Qed.
 
 Lemma preExtractMinHeap :
   forall x,
-    Aml minHeap x ->
+    listHeap x ->
     forall y z,
       Some (y,z) = preExtractMin x ->
-      Aml minHeap z.
+      listHeap z.
 Proof.
   intros x.
   induction x; simpl; intros.
   inversion H0.
-  inversion_clear H; subst.
   rename p into a.
   remember (getMin a x) as pt; destruct pt as [p t].
   destruct p as [zz zzz c].
   remember (split ($) [] c) as pq; destruct pq as [p q].
-  assert (Aml minHeap p). eapply splitHeap.
-  Focus 3. eauto. auto.
+  assert (listHeap p). eapply splitHeap.
+  Focus 3. eauto. Show Existentials. auto.
+  eapply Nil.
+  destruct y. auto.
+  eauto. Show Existentials.
   assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
-  Focus 3. eauto. auto. auto.
-  eapply childrenHeap. eauto.
+  Focus 3. eauto. 
+  Show Existentials.
+  inversion_clear H; subst.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H; subst; eauto.
+  inversion_clear H1; subst; eauto. Show Existentials.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H2; subst; eauto.
   inversion_clear H0; subst.
-  assert (Aml minHeap t). eapply getMinQHeap. Focus 3. eauto.
-  auto. auto.
+  Show Existentials.
 
-  clear Heqpq.
-  
-  induction q. simpl.
+  assert (Each rootHeap q) as eq.
+  eapply splitEach. Focus 4. eauto. 
+  apply Nil. destruct y; auto.
+  eauto. simpl. auto.
+  assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
+  Focus 3. eauto.  Show Existentials.
+  inversion_clear H; subst; eauto.
+  inversion_clear H0; subst; eauto.
+  inversion_clear H; subst; eauto.
+  inversion_clear H0; subst; eauto.
+  inversion_clear H0; subst; eauto. Show Existentials.
+  inversion_clear H2; subst; eauto.
+    
+  clear Heqpq. generalize dependent eq.
+  Show Existentials.
+  induction q; intros. simpl.
   apply preMeldHeap; auto.
-  simpl.
-  apply preInsertHeap; auto.
+  eapply getMinQHeap. Focus 3. eauto.
+  inversion_clear H; subst; eauto.
+  inversion_clear H0; subst; eauto.
+  inversion_clear H ; subst; eauto.
+  inversion_clear H0; subst; eauto.  
+  apply preInsertHeap; auto.  
+  simpl in eq. destruct eq. auto.
+  fold (fold_right preInsert (preMeld t p) q).
+  apply IHq.
+  simpl in eq; destruct eq; auto.
 Qed.
 
 Definition PQP x := skewBinaryRank x /\ Aml minHeap x.
@@ -1760,18 +2098,6 @@ Proof.
 Qed.
 
 Definition findMin := preFindMin.
-
-
-Inductive heapT : preT -> Prop :=
-  theap : forall r i c,
-          SBH.minHeap (Node r i c) ->
-          heapR r ->
-          heapT (Node r i c)
-with heapR : Boot -> Prop :=
-  rheap : forall h l,
-          SBH.minHeap (Node (Top h cil) 0 l) ->
-          SBH.Aml heapT l ->
-          heapR (Top h l).
 
 
 
