@@ -1,7 +1,14 @@
 Require Export OrderSig.
 Require Export PQSig.
 
+Inductive preT' A :=
+  Node : A -> nat -> list (preT' A) -> preT' A.
+
+Definition preQ' A := list (preT' A).
+
 Module SkewBinaryHeap (OO:Order) <: PQSig.
+
+
 
 Set Implicit Arguments.
 
@@ -17,41 +24,39 @@ Require Export caseTactic.
 
 (* TODO: stability *)
 
-Inductive preT  :=
-  Node : A -> nat -> list preT -> preT.
-
+Definition preT := preT' A.
 Definition preQ := list preT.
 
-Definition root x :=
+Definition root (x:preT) :=
   match x with
     | Node v _ _ => v
   end.
 
-Definition rank x :=
+Definition rank (x:preT) :=
   match x with
     | Node _ r _ => r
   end.
 
-Definition link x y :=
+Definition link (x y:preT) :=
   match x, y with
     | Node v n p, Node w m q =>
       if LEQ v w 
-        then Node v (S n) (y::p)
-        else Node w (S m) (x::q)
+        then Node _ v (S n) (y::p)
+        else Node _ w (S m) (x::q)
   end.
 
-Definition skewLink x y z :=
+Definition skewLink (x y z:preT) :=
   match x, y, z with
     | Node a i p, 
       Node b j q,
       Node c k r =>
       if LEQ a b
         then if LEQ a c
-          then Node a (S j) [y;z]
-          else Node c (S k) (x::y::r)
+          then Node _ a (S j) [y;z]
+          else Node _ c (S k) (x::y::r)
         else if LEQ b c
-          then Node b (S j) (x::z::q)
-          else Node c (S k) (x::y::r)
+          then Node _ b (S j) (x::z::q)
+          else Node _ c (S k) (x::y::r)
   end.
 
 Fixpoint ins t xs :=
@@ -105,9 +110,9 @@ Definition preInsert x ys :=
   match ys with
     | z1::z2::zr =>
       if beq_nat (rank z1) (rank z2)
-        then skewLink (Node x 0 []) z1 z2 :: zr
-        else Node x 0 [] :: ys
-    | _ => Node x 0 [] :: ys
+        then skewLink (Node _ x 0 []) z1 z2 :: zr
+        else Node _ x 0 [] :: ys
+    | _ => Node _ x 0 [] :: ys
   end.
 
 Definition preMeld x y :=
@@ -184,19 +189,19 @@ Extraction "ExtractedSkew.hs" preDeleteMin preFindMin preInsert preMeld.
 *)
 
 Inductive rankN : preT -> nat -> Prop :=
-  singleton : forall x, rankN (Node x 0 []) 0
+  singleton : forall x, rankN (Node _ x 0 []) 0
 | simple : forall n v p y,
-             rankN (Node v n p) n ->
+             rankN (Node _ v n p) n ->
              rankN y n ->
-             rankN (Node v (S n) (y::p)) (S n)
+             rankN (Node _ v (S n) (y::p)) (S n)
 | skewA : forall n x y z,
           rankN x n ->
           rankN z n ->
-          rankN (Node y (S n) [x;z]) (S n)
+          rankN (Node _ y (S n) [x;z]) (S n)
 | skewB : forall n x v p y,
-          rankN (Node v n p) n ->
+          rankN (Node _ v n p) n ->
           rankN y n ->
-          rankN (Node v (S n) ((Node x 0 [])::y::p)) (S n).
+          rankN (Node _ v (S n) ((Node _ x 0 [])::y::p)) (S n).
 Hint Constructors rankN.
 
 Definition rankP x := rankN x (rank x).
@@ -238,7 +243,7 @@ Hint Constructors skewBinaryRank.
 
 Lemma rankDestruct :
   forall v n c m,
-    rankN (Node v n c) m ->
+    rankN (Node _ v n c) m ->
     n = m.
 Proof.
   intros v n c m r.
@@ -351,7 +356,7 @@ Proof.
       assert (j = n). apply nat_compare_eq; auto. subst.
       fold ins.
       assert (exists k, k >= S n 
-        /\ posBinaryRank (ins (link (Node w n q) (Node v n p)) xs) k).
+        /\ posBinaryRank (ins (link (Node _ w n q) (Node _ v n p)) xs) k).
       eapply IHxsm.
       auto. auto.
       destruct H1.
@@ -720,7 +725,7 @@ Qed.
 
 Lemma splitPosRank :
   forall v n c,
-    rankP (Node v n c) ->
+    rankP (Node _ v n c) ->
     forall r m, posBinaryRank r m ->
       n <= m ->
       forall h t z, (h,t) = split r z c ->
@@ -771,7 +776,7 @@ Qed.
 
 Lemma splitRank :
   forall v n c,
-    rankP (Node v n c) ->
+    rankP (Node _ v n c) ->
     forall h t z, (h,t) = split [] z c ->
       skewBinaryRank h.
 Proof.
@@ -999,12 +1004,12 @@ Proof.
 Qed.
 
 Inductive minHeap : preT -> Prop :=
-  lone : forall v n, minHeap (Node v n [])
+  lone : forall v n, minHeap (Node _ v n [])
 | top : forall v n n' w m m' p ys,
-        minHeap (Node v n ys) ->
+        minHeap (Node _ v n ys) ->
         true = LEQ v w ->
-        minHeap (Node w m' p) ->
-        minHeap (Node v n' ((Node w m p) :: ys)).
+        minHeap (Node _ w m' p) ->
+        minHeap (Node _ v n' ((Node _ w m p) :: ys)).
 Hint Constructors minHeap.
 
 Inductive All t (p:t -> Prop) : list t -> Prop :=
@@ -1028,7 +1033,7 @@ Hint Resolve linkHeap.
 
 Lemma skewLinkHeap :
   forall x y z, minHeap y -> minHeap z -> 
-    minHeap (skewLink (Node x 0 []) y z).
+    minHeap (skewLink (Node _ x 0 []) y z).
 Proof.
   intros x y z Y Z.
   unfold skewLink.
@@ -1216,7 +1221,7 @@ Qed.
 
 Lemma childrenHeap :
   forall v i c,
-    minHeap (Node v i c) ->
+    minHeap (Node _ v i c) ->
     All minHeap c.
 Proof.
   intros v i c;
@@ -1246,7 +1251,7 @@ Proof.
   remember (split [] [] c) as pq; destruct pq as [p q].
   assert (All minHeap p). eapply splitHeap.
   Focus 3. eauto. auto.
-  assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
+  assert (minHeap (Node _ zz zzz c)). eapply getMinTHeap.
   Focus 3. eauto. auto. auto.
   eapply childrenHeap. eauto.
   assert (All minHeap t). eapply getMinQHeap. Focus 3. eauto.
@@ -1276,7 +1281,7 @@ Proof.
   remember (split [] [] c) as pq; destruct pq as [p q].
   assert (All minHeap p). eapply splitHeap.
   Focus 3. eauto. auto.
-  assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
+  assert (minHeap (Node _ zz zzz c)). eapply getMinTHeap.
   Focus 3. eauto. auto. auto.
   eapply childrenHeap. eauto.
   inversion_clear H0; subst.
