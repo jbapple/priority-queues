@@ -72,7 +72,7 @@ Fixpoint feapT A (leq:A->A->bool) v (x:preT' A) {struct x} : Prop :=
     | Node wc n d =>
       feapR leq v wc
       /\ match wc with
-           | Top w c => heapM leq w d
+           | Top w c => feapM leq w d
          end
   end
 with feapR A (leq:A->A->bool) v (x:Root A) {struct x} : Prop :=
@@ -1222,9 +1222,9 @@ Inductive All t (p:t -> Prop) : list t -> Prop :=
 Hint Constructors All.
 *)
 
-Definition minHeap x := exists v, heapT OO.LEQ v x.
-Definition rootHeap x := exists v, heapR OO.LEQ v x.
-Definition listHeap x := exists v, heapM OO.LEQ v x.
+Definition minHeap x := exists v, feapT OO.LEQ v x.
+Definition rootHeap x := exists v, feapR OO.LEQ v x.
+Definition listHeap x := exists v, feapM OO.LEQ v x.
 
 Hint Unfold minHeap.
 Hint Unfold rootHeap.
@@ -1234,8 +1234,19 @@ Lemma Nil : OO.A -> listHeap ($).
 Proof.
   intros x; unfold listHeap.
   exists x; auto.
+  simpl. auto.
 Qed.
 Hint Resolve Nil.
+
+Ltac lisp := simpl in *;
+  match goal with
+    | [ H : _ /\ _ |- _ ] => destruct H; lisp
+    | [ |- _ /\ _ ] => split; lisp
+    | [ H : minHeap _ |- _ ] => destruct H; lisp
+    | [ H : rootHeap _ |- _ ] => destruct H; lisp
+    | [ H : listHeap _ |- _ ] => destruct H; lisp
+    | _ => auto
+  end.
 
 Lemma Cons : 
   forall xs x, 
@@ -1243,53 +1254,47 @@ Lemma Cons :
     listHeap xs ->
     listHeap (x:::xs).
 Proof.
+  unfold listHeap at 2. simpl.
   induction xs as [|y ys I]; simpl; intros x X XS.
-  unfold listHeap.
-  destruct x as [v i c].
-  destruct v as [r d].
+
+  destruct x as [v i c]; destruct v as [r d]; simpl.
   exists r; repeat (constructor; auto).
   apply OO.leqRefl.
   destruct X as [v X].
-  inversion_clear X; subst.
-  inversion_clear H; subst; auto.
+  simpl in X. destruct X. destruct H. auto.
   destruct X as [v X].
-  inversion_clear X; subst; auto.
+  simpl in X. lisp.
 
-  destruct XS as [v XS].
-  unfold listHeap.
-  destruct X as [w X].
+  destruct XS as [v XS]. lisp.
+  rename x0 into w.
+
   remember (OO.LEQ v w) as vw; destruct vw.
 
   exists v; repeat (constructor; auto).
-  destruct x.
-  inversion_clear X; subst; repeat (constructor; auto).
-  inversion_clear H; subst; auto.
+  destruct x. lisp.
+  destruct r; lisp.
   eapply OO.leqTransTrue; eauto.
-  inversion_clear H; subst; auto.
 
-  exists w; repeat (constructor; auto).
-  inversion_clear XS; subst.
-  destruct y.
-  inversion_clear H; subst;
-    repeat (constructor; auto).
-  inversion_clear H1; subst.
+  exists w; lisp.
+  destruct y; lisp.
+  destruct r; lisp.
   eapply OO.leqTransTrue.
   eapply OO.leqSymm; eauto.
   auto.
-  inversion_clear H1; subst; auto.
-  inversion_clear XS; subst.
-  clear H I X y x.
+  destruct ys; lisp.
+  destruct p; lisp.
+  destruct r; lisp.
+  eapply OO.leqTransTrue.
+  eapply OO.leqSymm; eauto.
+  auto.
+  clear H I H1 y x.
   generalize dependent w.
   generalize dependent v.
   induction ys; intros.
-  eauto.
-  inversion_clear H0; subst.
-  constructor; auto.
-  Focus 2. eapply IHys. eauto. eauto.
-  destruct p; inversion_clear H; subst; repeat (constructor; auto).
-  inversion_clear H0; subst.
-  Focus 2.
-  inversion_clear H0; subst; auto.
+  eauto. lisp.
+  Focus 2. eapply IHys; eauto.
+  destruct p0; lisp.
+  destruct r; lisp.
   eapply OO.leqTransTrue.
   eapply OO.leqSymm; eauto.
   auto.
@@ -1305,10 +1310,8 @@ Proof.
   destruct H as [w R].
   destruct v as [x c].
   exists x.
-  constructor; auto.
-  constructor; auto. 
+  lisp.
   apply OO.leqRefl.
-  inversion R; subst. auto.
 Qed.
 Hint Resolve lone.
 
@@ -1320,27 +1323,11 @@ Lemma top : forall v n n' w m m' p ys,
 Proof.
   intros.
   destruct v as [r i c].
-  exists r.
-  inversion H; inversion H1; subst.
-  constructor; auto.
-  inversion H2; subst.
-  inversion H6; subst.
-  constructor; auto. apply OO.leqRefl.
-  constructor; auto.
-  destruct p; destruct w; simpl in *.
-  constructor; auto.
-  inversion H3; subst. 
-  constructor; auto.
-  inversion H6; subst; auto.
-  inversion H3; subst.
-  inversion H9; subst.
-  inversion H6; subst.
-  constructor; auto.
-  destruct ys; auto.
-  inversion H2; subst.
-  inversion H6; subst.
-  inversion H9; subst.
-  constructor; auto.
+  exists r. lisp.
+  apply OO.leqRefl.
+  destruct i; lisp. 
+  destruct w; lisp.
+  destruct w; lisp.
 Qed.
 Hint Resolve top.
 
@@ -1368,28 +1355,40 @@ Proof.
   Case "a <= b".
     remember (LEQ a c) as ac; destruct ac; simpl.
     SCase "a <= c".
-      eapply top with (n:=0); auto. eapply top.
-      apply lone with (n := 0). auto.
-      eauto. eauto. eauto.
+      lisp. destruct b; destruct c; lisp.
+      destruct a; lisp.
+      exists a; lisp.
+      apply OO.leqRefl.
     SCase "a > c".
       assert (true = LEQ c a). apply leqSymm; auto.
-      eapply top with (n:=0).  Focus 3. apply lone with (n := 0). auto.
-      eapply top. eauto.
-      eapply leqTransTrue; eauto. eauto. auto.
+      destruct c. exists a0.
+      lisp. apply OO.leqRefl.
+      destruct a; destruct b; lisp.
+      destruct a; auto.
+      destruct a; destruct b; lisp.
+      eapply OO.leqTransTrue; eauto. 
   Case "b > a".
     assert (true = LEQ b a). apply leqSymm; auto.
     remember (LEQ b c) as bc; destruct bc; simpl.
     SCase "b <= c".
-      eapply top with (n:=0). Focus 3.
-      eapply lone with (n:= 0). auto.
-      eapply top; auto. eauto. eauto. auto.
+      destruct c; lisp.
+      destruct b; lisp.
+      exists a1; lisp.
+      apply OO.leqRefl.
+      destruct a; lisp.
+      destruct a; auto.
     SCase "b > c".
       assert (true = LEQ c b). apply leqSymm; auto.
-      eapply top with (n:=0). Focus 3. eapply lone with (n:=0). auto.
-      eapply top; auto. eauto. eauto.
-      eapply leqTransTrue; eauto.
+      destruct c; lisp.
+      destruct b; lisp.
+      exists a0; lisp.
+      apply OO.leqRefl.
+      destruct a; lisp.
+      eapply OO.leqTransTrue; eauto.
+      destruct a; auto.
 Qed.
 Hint Resolve skewLinkHeap.
+
 
 Lemma insHeap : 
   forall x xs,
@@ -1618,6 +1617,7 @@ Proof.
   inversion_clear H1; subst; eauto.
 Qed.
 
+(*
 Lemma childrenHeap :
   forall v i c,
     minHeap (Node v i c) ->
@@ -1641,6 +1641,9 @@ Proof.
   Show Existentials.
   exists w. auto.
 Qed.
+*)
+
+Hint Resolve OO.leqRefl.
 
 Lemma preDeleteMinHeap :
   forall x,
@@ -1649,8 +1652,7 @@ Lemma preDeleteMinHeap :
 Proof.
   intros x.
   induction x; simpl; intros.
-  eauto.
-  inversion_clear H; subst.
+  eauto. lisp.
   rename p into a.
   remember (getMin a x) as pt; destruct pt as [p t].
   destruct p as [zz zzz c].
@@ -1658,32 +1660,31 @@ Proof.
   assert (listHeap p). eapply splitHeap.
   Focus 3. eauto. auto.
   assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
-  Focus 3. eauto. 
-  inversion_clear H0; subst; eauto.
-  inversion_clear H0; subst; eauto.
-  inversion_clear H; subst; eauto.
-  inversion_clear H1; subst; eauto.
+  Focus 3. eauto. eauto. eauto.
+  destruct c; lisp.
+  destruct p0; lisp. eauto.
+  destruct r; lisp. eauto.
+  destruct zz; lisp.
+  exists a1; lisp.
   assert (Each rootHeap q) as eq.
   eapply splitEach. Focus 4. eauto. eauto. simpl. auto.
   assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
-  Focus 3. eauto. 
-  inversion_clear H0; subst; eauto.
-  inversion_clear H0; subst; eauto.
-  inversion_clear H1; subst; eauto.
-  inversion_clear H2; subst; eauto.
+  Focus 3. eauto. eauto. eauto.
+  destruct c; lisp.
+  destruct p0; destruct zz; lisp.
+  destruct r; lisp.
+  exists a0; lisp.
     
   clear Heqpq. generalize dependent eq.
 
   induction q; intros. simpl.
   apply preMeldHeap; auto.
-  eapply getMinQHeap. Focus 3. eauto.
-  inversion_clear H0; subst; eauto.
-  inversion_clear H0; subst; eauto.
-  apply preInsertHeap; auto.  
-  simpl in eq. destruct eq. auto.
+  eapply getMinQHeap. Focus 3. eauto. eauto. eauto.
+  apply preInsertHeap; auto.
+  lisp. eauto.
   fold (fold_right preInsert (preMeld t p) q).
   apply IHq.
-  simpl in eq; destruct eq; auto.
+  lisp.
 Qed.
 
 Lemma preExtractMinHeap :
@@ -1706,52 +1707,35 @@ Proof.
   destruct y. auto.
   eauto. Show Existentials.
   assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
-  Focus 3. eauto. 
-  Show Existentials.
-  inversion_clear H; subst.
-  inversion_clear H1; subst; eauto.
-  inversion_clear H; subst; eauto.
-  inversion_clear H1; subst; eauto. Show Existentials.
-  inversion_clear H1; subst; eauto.
-  inversion_clear H2; subst; eauto.
+  Focus 3. eauto. lisp. eauto. eauto. lisp. eauto.
+  lisp. destruct zz; eauto.
+  eauto. lisp. eauto. 
   inversion_clear H0; subst.
   Show Existentials.
 
   assert (Each rootHeap q) as eq.
-  eapply splitEach. Focus 4. eauto. 
-  apply Nil. destruct y; auto.
-  eauto. simpl. auto.
+  eapply splitEach. Focus 4. eauto. auto. auto. 
   assert (minHeap (Node zz zzz c)). eapply getMinTHeap.
-  Focus 3. eauto.  Show Existentials.
-  inversion_clear H; subst; eauto.
-  inversion_clear H0; subst; eauto.
-  inversion_clear H; subst; eauto.
-  inversion_clear H0; subst; eauto.
-  inversion_clear H0; subst; eauto. Show Existentials.
-  inversion_clear H2; subst; eauto.
+  Focus 3. eauto.  Show Existentials. eauto. eauto.
+  lisp. destruct zz; eauto.
     
   clear Heqpq. generalize dependent eq.
   Show Existentials.
-  induction q; intros. simpl.
+  induction q; intros; simpl.
   apply preMeldHeap; auto.
-  eapply getMinQHeap. Focus 3. eauto.
-  inversion_clear H; subst; eauto.
-  inversion_clear H0; subst; eauto.
-  inversion_clear H ; subst; eauto.
-  inversion_clear H0; subst; eauto.  
-  apply preInsertHeap; auto.  
-  simpl in eq. destruct eq. auto.
-  fold (fold_right preInsert (preMeld t p) q).
-  apply IHq.
-  simpl in eq; destruct eq; auto.
+  eapply getMinQHeap. Focus 3. eauto. eauto. eauto. eauto.
+  apply preInsertHeap; auto.  lisp; eauto. Show Existentials.
+  lisp.
 Qed.
 
-Definition PQP x := skewBinaryRank x /\ Aml minHeap x.
+Definition PQP x := skewBinaryRank x /\ listHeap x.
 
 Definition PQ := { x:preQ | PQP x}.
 
 Program Definition empty : PQ := ($).
 Next Obligation.
+  lisp. split. lisp. lisp. lisp. eauto.
+  simpl. unfold listHeap.
   split; constructor.
 Qed.
 
