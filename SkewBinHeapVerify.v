@@ -2,7 +2,7 @@ Set Implicit Arguments.
 Require Export PQSig.
 Require Export skewBinaryHeap.
 
-Module SkewBinHeapVerify (OO:Order) <: PQVerify.
+Module SBHeapVerify (OO:Order) <: PQVerify.
 
 Module PQS := SkewBinaryHeap(OO).
 Export PQS.
@@ -21,7 +21,7 @@ Fixpoint countTree (same:A -> A -> bool) x l :=
           else r
   end.
 
-Fixpoint size l :=
+Fixpoint size (l:preT) :=
   match l with
     | Node _ _ c =>
       S (fold_right plus 0 (map size c))
@@ -36,8 +36,8 @@ Hint Resolve sizePos.
 
 Lemma preT_nest_ind :
   forall P : preT -> Prop,
-    (forall a n, P (Node a n [])) ->
-    (forall a n x l, P (Node a n l) -> P x -> P (Node a n (x::l))) ->
+    (forall a n, P (Node _ a n [])) ->
+    (forall a n x l, P (Node _ a n l) -> P x -> P (Node _ a n (x::l))) ->
     forall v, P v.
 Proof.
   intros P emp ful v.
@@ -254,7 +254,7 @@ Qed.
 Lemma preFindFirst :
   forall v i c a ps,
     true = LEQ v (preFindMinHelp a ps) ->
-    v = preFindMinHelp (Node v i c) ps.
+    v = preFindMinHelp (Node _ v i c) ps.
 Proof.
   intros.
   induction ps.
@@ -288,11 +288,11 @@ Proof.
   remember (f y a) as ya; destruct ya.
   auto with arith.
   intros.
-  replace a with (root (Node a n l)) by auto.
+  replace a with (root (Node _ a n l)) by auto.
   eapply minHeapCount. auto. eauto.
   simpl. rewrite <- Heqya. omega.
   destruct p as [v i c]; simpl.
-  remember (countTree f y (Node v i c)) as yvic. destruct yvic.
+  remember (countTree f y (Node _ v i c)) as yvic. destruct yvic.
   remember (LEQ v (preFindMinHelp a ps)) as vaps; destruct vaps.
   remember (f y v) as yv; destruct yv.
   auto with arith.
@@ -307,10 +307,10 @@ Proof.
   apply E. auto.
   symmetry.
   apply leqRefl.
-  remember (f y (preFindMinHelp (Node v i c) ps)) as yvps; destruct yvps.
+  remember (f y (preFindMinHelp (Node _ v i c) ps)) as yvps; destruct yvps.
   pose (@IHps H5 _ H0 _ D y) as j.
   rewrite <- Heqyvps in j.
-  assert (v = preFindMinHelp (Node v i c) ps) as T.
+  assert (v = preFindMinHelp (Node _ v i c) ps) as T.
   eapply preFindFirst. eauto.
   rewrite <- T in Heqyvps.
   destruct D as [E [F [G I]]].
@@ -365,10 +365,10 @@ Proof.
   replace true with (LEQ y y).
   apply E. auto.
   symmetry. apply leqRefl.
-  remember (f y (preFindMinHelp (Node v i c) ps)) as yvps; destruct yvps.
+  remember (f y (preFindMinHelp (Node _ v i c) ps)) as yvps; destruct yvps.
   pose (@IHps H5 _ H0 _ D y) as j.
   rewrite <- Heqyvps in j.
-  assert (v = preFindMinHelp (Node v i c) ps) as T.
+  assert (v = preFindMinHelp (Node _ v i c) ps) as T.
   eapply preFindFirst. eauto.
   rewrite <- T in Heqyvps.
   destruct D as [E [F [G I]]].
@@ -376,7 +376,7 @@ Proof.
   replace true with (LEQ y y).
   apply E. auto.
   symmetry. apply leqRefl.
-  replace v with (root (Node v i c)) by auto.
+  replace v with (root (Node _ v i c)) by auto.
   eapply minHeapCount. auto. eauto. omega.
   remember (f y (preFindMinHelp a ps)) as yaps; destruct yaps;
     remember (f y v) as yv; destruct yv.
@@ -387,14 +387,14 @@ Proof.
   symmetry.
   eapply leqTransTrue.
   eapply leqSymm. eauto.
-  replace v with (root (Node v i c)) by auto.
+  replace v with (root (Node _ v i c)) by auto.
   symmetry.
   eapply minHeapCount. auto. eauto. omega.
   intros.
   symmetry.
   eapply leqTransTrue.
   eapply leqSymm. eauto.
-  replace v with (root (Node v i c)) by auto.
+  replace v with (root (Node _ v i c)) by auto.
   symmetry.
   eapply minHeapCount. auto. eauto. omega.
   
@@ -648,7 +648,7 @@ Qed.
 
 Lemma rankChildren :
   forall n v c,
-    rankP (Node v n c) ->
+    rankP (Node _ v n c) ->
     All rankP c.
 Proof.
   induction n; unfold rankP; simpl; intros.
@@ -814,4 +814,4 @@ Proof.
   inversion Heqpppp.
 Qed.
 
-End SkewBinHeapVerify.
+End SBHeapVerify.
