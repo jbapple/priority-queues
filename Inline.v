@@ -10,6 +10,17 @@ with Root A :=
   Top : A -> list (preT' A) -> Root A.
 Scheme pre_gen := Induction for preT' Sort Prop
 with root_gen := Induction for Root Sort Prop.
+
+Fixpoint preT'_size a (x:preT' a) :=
+  match x with
+    | Node y _ c =>
+      Root_size y + fold_right plus 0 (map (@preT'_size _) c)
+  end
+with Root_size a (x:Root a) :=
+  match x with
+    | Top _ c => fold_right plus 0 (map (@preT'_size _) c)
+  end.
+
 Check pre_gen.
 *)
 
@@ -282,6 +293,31 @@ Definition rank (x:preT) :=
   match x with
     | Node _ r _ => r
   end.
+
+Print O.A.
+Print O.LEQ.
+Print A.
+
+Inductive tree a :=
+ branch : a -> list (tree a) -> tree a.
+
+Fixpoint size a (x:tree a) :=
+  match x with
+    | branch _ c => fold_right plus 0 (map (@size _) c)
+  end.
+
+Print tree_ind.
+Print tree_rect.
+
+Check tree_ind.
+Lemma size_ind :
+  forall a (x:tree a), nat.
+Proof.
+  intros.
+  induction x.
+Abort.
+
+Check tree_rect.
 
 Definition link (x y:preT) :=
   match x, y with
@@ -1318,6 +1354,25 @@ Ltac lisp := simpl in *;
     | [ H : minHeap _ |- _ ] => destruct H; lisp
     | [ H : rootHeap _ |- _ ] => destruct H; lisp
     | [ H : listHeap _ |- _ ] => destruct H; lisp
+    | [ _ : false = OO.LEQ ?a ?b |- true = OO.LEQ ?b ?a] 
+      => apply OO.leqSymm; auto; lisp
+    |  [_ : true = OO.LEQ ?a ?b , 
+        _ : true = OO.LEQ ?b ?c 
+        |- true = OO.LEQ ?a ?c] => eapply OO.leqTransTrue; eauto; lisp
+    |  [_ : true = OO.LEQ ?a ?b , 
+        _ : false = OO.LEQ ?a ?c 
+        |- true = OO.LEQ ?c ?b] => 
+    assert (true = OO.LEQ c a); lisp
+    |  [_ : false = OO.LEQ ?a ?b , 
+        _ : false = OO.LEQ ?b ?c 
+        |- true = OO.LEQ ?c ?a] => 
+    assert (false = OO.LEQ a c); lisp
+    |  [_ : false = OO.LEQ ?a ?b , 
+        _ : false = OO.LEQ ?b ?c 
+        |- false = OO.LEQ ?a ?c] => 
+    eapply OO.leqTransFalse; eauto; lisp
+    | [ |- true = OO.LEQ ?a ?a] => apply OO.leqRefl; auto; lisp
+    | [ |- match ?a with | Top _ _ => True end] => destruct a; auto; lisp
     | _ => auto
   end.
 
@@ -1352,19 +1407,13 @@ Proof.
   exists (Some v); repeat (constructor; auto).
   destruct x. lisp.
   destruct r; lisp.
-  eapply OO.leqTransTrue; eauto.
 
   exists (Some w); lisp.
   destruct y; lisp.
   destruct r; lisp.
-  eapply OO.leqTransTrue.
-  eapply OO.leqSymm; eauto.
-  auto.
   destruct ys; lisp.
   destruct p; lisp.
   destruct r; lisp.
-  eapply OO.leqTransTrue.
-  eapply OO.leqSymm; eauto.
   auto.
   clear H I H1 y x.
   generalize dependent w.
@@ -1374,8 +1423,6 @@ Proof.
   Focus 2. eapply IHys; eauto.
   destruct p0; lisp.
   destruct r; lisp.
-  eapply OO.leqTransTrue.
-  eapply OO.leqSymm; eauto.
   auto.
 
   exists (None:option OO.A).
@@ -1408,7 +1455,6 @@ Proof.
   destruct v as [x c].
   exists (Some x).
   lisp.
-  apply OO.leqRefl.
 Qed.
 Hint Resolve lone.
 
@@ -1421,7 +1467,6 @@ Proof.
   intros.
   destruct v as [r i c].
   exists (Some r). lisp.
-  apply OO.leqRefl.
   destruct i; lisp. 
   destruct w; lisp.
   destruct w; lisp.
@@ -1455,15 +1500,13 @@ Proof.
       lisp. destruct b; destruct c; lisp.
       destruct a; lisp.
       exists (Some a); lisp.
-      apply OO.leqRefl.
     SCase "a > c".
       assert (true = preLEQ c a). apply preleqSymm; auto.
       destruct c. exists (Some a0).
-      lisp. apply OO.leqRefl.
-      destruct a; destruct b; lisp.
-      destruct a; auto.
-      destruct a; destruct b; lisp.
-      eapply OO.leqTransTrue; eauto. 
+      lisp. 
+      destruct a; lisp.
+      destruct b; lisp.
+      destruct a; lisp.
   Case "b > a".
     assert (true = preLEQ b a). apply preleqSymm; auto.
     remember (preLEQ b c) as bc; destruct bc; simpl.
@@ -1471,7 +1514,7 @@ Proof.
       destruct c; lisp.
       destruct b; lisp.
       exists (Some a1); lisp.
-      apply OO.leqRefl.
+      
       destruct a; lisp.
       destruct a; auto.
     SCase "b > c".
@@ -1479,10 +1522,6 @@ Proof.
       destruct c; lisp.
       destruct b; lisp.
       exists (Some a0); lisp.
-      apply OO.leqRefl.
-      destruct a; lisp.
-      eapply OO.leqTransTrue; eauto.
-      destruct a; auto.
 Qed.
 Hint Resolve skewLinkHeap.
 
@@ -1509,43 +1548,121 @@ Proof.
     exists x0; eauto.
 Qed.
 
+
+ Require Import ZArith.
+ Require Import Coq.Init.Datatypes.
+ Open Scope Z_scope.
+ Require Import Coq.Init.Specif.
+
+ Inductive test : Z -> Set :=
+   | up   : forall z, test (z+1) -> test z
+   | down : forall z, test  z    -> test (z+1).
+
+Program Definition next' (z:Z)(t:test z) : sum (test (z+1)) (test (z-1)) :=
+   match t with
+     | down r d => inr d
+     | up   r u => inl u
+   end.
+Next Obligation.
+  omega.
+Defined.
+
+Print next'.
+
+Print next'_obligation_1.
+
+Check all_ind.
+
+Lemma heapLess :
+  (forall x a b, 
+    true = OO.LEQ a b -> 
+    feapT OO.LEQ (Some b) x -> 
+    feapT OO.LEQ (Some a) x)
+  /\ (forall x a b, 
+    true = OO.LEQ a b -> 
+    feapR OO.LEQ (Some b) x -> 
+    feapR OO.LEQ (Some a) x)
+  /\ (forall x a b, 
+    true = OO.LEQ a b -> 
+    feapM OO.LEQ (Some b) x -> 
+    feapM OO.LEQ (Some a) x).
+Proof.
+  apply all_ind; intros; lisp.
+  eapply H; eauto.
+  eapply H; eauto.
+  eapply H0; eauto.
+Qed.
+
+Lemma preInsertHeapLess :
+  forall a x,
+    feapR OO.LEQ (Some a) x ->
+    forall b ys,
+      feapM OO.LEQ (Some b) ys ->
+      forall c, c = (if OO.LEQ a b then a else b) ->
+        feapM OO.LEQ (Some c) (preInsert x ys).
+Proof.
+  intros a x X b ys P c C.
+  destruct ys; lisp.
+  apply heapLess with (b := a); lisp.
+  remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
+  destruct ys; lisp.
+  apply heapLess with (b := a); lisp.
+  remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
+  apply heapLess with (b := b); lisp.
+  remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
+  destruct p as [b0 j q]; lisp; destruct p0 as [c0 k r]; lisp.
+  remember (beq_nat j k) as jk; destruct jk; destruct x; lisp.
+  destruct b0; destruct c0; lisp.
+  remember (OO.LEQ a0 a1) as a01; destruct a01; lisp.
+  remember (OO.LEQ a0 a2) as a02; destruct a02; lisp.
+  remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
+  remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
+  remember (OO.LEQ a1 a2) as a12; destruct a12; lisp.
+  remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
+  remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
+  apply heapLess with (b:= b); lisp.
+  remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
+  remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
+  apply heapLess with (b:= b); lisp.
+  remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
+  apply heapLess with (b:= b); lisp.
+  remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
+  apply heapLess with (b:= b); lisp.
+  remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
+Qed.
+
+
 Lemma preInsertHeap :
   forall x ys,
     rootHeap x ->
     listHeap ys ->
     listHeap (preInsert x ys).
-Proof with auto.
-  intros x ys P X.
-  destruct ys.
-  Case "ys = ($)".
-    simpl. 
-    SCase "Aml minHeap [Node x 0 ($)]".
-      eauto.
-  Case "ys = p ::: _".
-    unfold preInsert.
-    destruct ys.
-    SCase "ys = nil".
-      rename P into M.
-      SSCase "Aml minHeap [Node x 0 ($); p]".
-        inversion M; subst. auto.
-    SCase "ys = p0 ::: _".
-      rename p0 into q.
-      rename P into M.
-      remember (beq_nat (rank p) (rank q)) as pq; destruct pq.
-      SSCase "Aml minHeap (skewLink (Node x 0 ($)) p q ::: ys)".
-        apply Cons.
-        apply skewLinkHeap; auto.
-        inversion_clear X; auto.
-        inversion_clear H. exists x0; auto.
-        inversion_clear X; subst.
-        inversion_clear H; subst.
-        inversion_clear H1; subst.
-        eauto. inversion_clear X; subst.
-        inversion_clear H; subst.
-        inversion_clear H1; subst.
-        eauto.
-      SSCase "Aml minHeap (Node x 0 ($) ::: p ::: q ::: ys".
-         apply Cons; auto.
+Proof.
+  unfold rootHeap; unfold listHeap; intros.
+  destruct H; destruct H0.
+  exists (@None OO.A).
+  destruct ys; lisp.
+  destruct x; lisp.
+  destruct ys; lisp.
+  destruct x; lisp.
+  destruct p; lisp.
+  destruct r; lisp.
+  destruct p as[b j q]; destruct p0 as [c k r]; lisp.
+  destruct b; destruct c; lisp.
+  remember (beq_nat j k) as jk; destruct jk; lisp.
+  destruct x; lisp.
+  remember (OO.LEQ a1 a) as a1a; destruct a1a; lisp.
+  remember (OO.LEQ a1 a0) as a10; destruct a10; lisp.
+  remember (OO.LEQ a a0) as aa0; destruct aa0; lisp.
+  induction ys; lisp.
+  destruct x1; lisp.
+  induction p; lisp.
+  destruct r0; lisp.
+  destruct x; lisp.
+  destruct x1; lisp.
+  induction ys; lisp.
+  induction p; lisp.
+  destruct r0; lisp.
 Qed.
 
 Lemma meldUniqHeap :
@@ -2200,14 +2317,20 @@ Definition preMeld x y :=
         else Full (Top w (SBH.preInsert (Top v c) d))
   end.
 
+Hint Unfold preMeld.
+
 Definition preInsert x xs :=
   preMeld (Full (Top x SBH.preEmpty)) xs.
+
+Hint Unfold preInsert.
 
 Definition preFindMin x :=
   match x with
     | Empty => None
     | Full (Top v _) => Some v
   end.
+
+Hint Unfold preFindMin.
 
 Definition preExtractMin x :=
   match x with
@@ -2220,13 +2343,33 @@ Definition preExtractMin x :=
       end)
   end.
 
+Hint Unfold preExtractMin.
+
 Definition preDeleteMin x :=
   match preExtractMin x with
     | None => x
     | Some (_,y) => y
   end.
 
-Definition PQ := Boot.
+Hint Unfold preDeleteMin.
+
+Definition minHeap x := exists v, feapT OO.LEQ v x.
+Definition rootHeap x := exists v, feapR OO.LEQ v x.
+Definition listHeap x := exists v, feapM OO.LEQ v x.
+
+Hint Unfold minHeap.
+Hint Unfold rootHeap.
+Hint Unfold listHeap.
+
+Definition wrapHeap x :=
+  match x with
+    | Empty => True
+    | Full y => rootHeap y
+  end.
+
+Hint Unfold wrapHeap.
+
+Definition PQ := {x:bootWrap | wrapHeap x}.
 
 Fixpoint countR (f:A->A->bool) x r :=
   match r with
@@ -2247,7 +2390,7 @@ with countM f x l :=
     | y:::ys => countT f x y + countM f x ys
   end.
 
-Definition count (same:DER LEQ) x p :=
+Definition preCount (same:DER LEQ) x p :=
   match p with
     | Empty => 0
     | Full q =>
@@ -2256,10 +2399,18 @@ Definition count (same:DER LEQ) x p :=
       end
   end.
 
+Hint Unfold preCount.
+
+Program Definition count : (DER LEQ) -> A -> PQ -> nat := preCount.
+
+Hint Unfold count.
+
 Definition check (same:DER LEQ) x y := 
   match same with
     | exist f _ => f x y
   end.
+
+Hint Unfold check.
 
 Check all_ind.
 
@@ -2295,12 +2446,13 @@ Lemma countSAME :
 Proof.
   intros same x y xy p.
   destruct same as [f D]; unfold count.
-  simpl in xy. destruct p; auto.
+  simpl in xy. destruct p; auto. simpl.
+  unfold preCount. destruct x0; simpl; auto.
   apply countJoin; auto.
 Qed.
 
 Definition preEmpty := Empty.
-Definition empty := preEmpty.
+Program Definition empty : PQ := preEmpty.
 
 Lemma emptyCount :
   forall same x, count same x empty = 0.
@@ -2308,7 +2460,37 @@ Proof.
   intros; auto.
 Qed.
 
-Definition insert := preInsert.
+
+Ltac lisp := simpl in *;
+  match goal with
+    | [ H : _ /\ _ |- _ ] => destruct H; lisp
+    | [ |- _ /\ _ ] => split; lisp
+    | [ H : minHeap _ |- _ ] => destruct H; lisp
+    | [ H : rootHeap _ |- _ ] => destruct H; lisp
+    | [ H : listHeap _ |- _ ] => destruct H; lisp
+    | _ => auto
+  end.
+
+Program Definition insert : A -> PQ -> PQ := preInsert.
+Next Obligation.
+  destruct x0; lisp.
+  destruct x0; lisp.
+  exists None; lisp.
+  unfold preInsert; simpl.
+  destruct b; lisp.
+  remember (LEQ x a) as xa; destruct xa; lisp.
+  Focus 2.
+  exists (Some a). lisp.
+  eapply SBH.preInsertHeapLess.
+  Focus 2. eauto.
+  Focus 3.
+  assert (a = if LEQ x a then x else a); auto.
+  remember (LEQ x a) as xa; destruct xa.
+  inversion Heqxa. auto. eauto.
+  Focus 2. lisp.
+  unfold rootHeap. simpl.
+  exists None. lisp.
+Qed.
 
 Lemma insertCountM : 
   forall f x,
@@ -2323,12 +2505,11 @@ Proof.
   destruct q; simpl; try omega.
   destruct p0; destruct p1; simpl.
   remember (EqNat.beq_nat n n0) as nn0; destruct nn0; simpl; auto;
-  remember (SBH.O.LEQ p r) as pr; destruct pr; simpl; auto;
-  remember (SBH.O.LEQ p r0) as pr0; destruct pr0; simpl; auto;
-  remember (SBH.O.LEQ r r0) as rr0; destruct rr0; simpl; auto;
+  remember (SBH.O.preLEQ p r) as pr; destruct pr; simpl; auto;
+  remember (SBH.O.preLEQ p r0) as pr0; destruct pr0; simpl; auto;
+  remember (SBH.O.preLEQ r r0) as rr0; destruct rr0; simpl; auto;
     try omega.
 Qed.
-
 
 Lemma insertCount :
   forall same x inp y,
@@ -2343,7 +2524,8 @@ Proof.
   simpl. destruct same as [f D].
   destruct inp; simpl; auto.
   unfold count.
-  simpl. destruct b.
+  simpl. destruct x0; simpl. auto.
+  destruct b.
   remember (LEQ y a) as ya; destruct ya; simpl.
   remember (f x y) as xy; destruct xy; simpl; auto;
     remember (f x a) as xa; destruct xa; simpl; auto;
@@ -2365,9 +2547,59 @@ Proof.
   simpl. rewrite <- Heqxy. omega.
 Qed.
 
-Definition findMin := preFindMin.
+Program Definition findMin : PQ -> option A := preFindMin.
 
+Check all_ind.
+Print all_ind.
 
+Lemma findMinAll :
+  (forall x f (d:DERP LEQ f) y a,
+    feapT OO.LEQ (Some a) x ->
+    (if f y a then S (countT f y x) else countT f y x) > 0 ->
+    LEQ a y = true)
+  /\ (forall x f (d:DERP LEQ f) y a,
+    feapR OO.LEQ (Some a) x ->
+    (if f y a then S (countR f y x) else countR f y x) > 0 ->
+    LEQ a y = true)
+  /\ (forall x f (d:DERP LEQ f) y a,
+    feapM OO.LEQ (Some a) x ->
+    (if f y a then S (countM f y x) else countM f y x) > 0 ->
+    LEQ a y = true).
+Proof.
+  apply all_ind; simpl; intros.
+  destruct H1; destruct r; simpl in *.
+  destruct H1.
+  remember (countM f y m) as fym; destruct fym.
+  eapply H; eauto. 
+  remember (f y a) as fya; destruct fya; try omega.
+  eapply H0; eauto. eapply SBH.heapLess. eauto. auto.
+  rewrite <- Heqfym.
+  remember (f y a) as fya; destruct fya; try omega.
+  destruct H0.
+  remember (f y a) as fya; destruct fya. 
+  destruct d.
+  assert (forall z, LEQ z a = LEQ z y).
+  apply H3. destruct H4. destruct H5. rewrite H5. auto.
+  erewrite <- H5. auto.
+  remember (f y a0) as fya0; destruct fya0.
+  eapply H; eauto. eapply SBH.heapLess. eauto. auto.
+  rewrite <- Heqfya0. omega.
+  eapply H; eauto. eapply SBH.heapLess. eauto. auto.
+  rewrite <- Heqfya0. auto.
+  remember (f y a) as fya; destruct fya.
+  destruct d.
+  apply H1 in Heqfya. destruct Heqfya. erewrite H4. auto.
+  inversion H0.
+  destruct H1.
+  remember (f y a) as fya; destruct fya.
+  eapply H; eauto.
+  rewrite <- Heqfya. omega.
+  remember (countT f y p) as fyp; destruct fyp.
+  eapply H0; eauto.
+  rewrite <- Heqfya. omega.
+  eapply H; eauto.
+    rewrite <- Heqfya. omega.
+Qed.
 
 Lemma findMinCount :
   forall inp,
@@ -2381,11 +2613,27 @@ Lemma findMinCount :
               LEQ x y = true
     end.
 Proof.
-  intros; destruct inp; simpl; intros; auto.
-  destruct b; simpl; intros.
-  destruct same as [f D]; simpl.
-  remember (f y a) as ya; destruct ya. omega.
+  intros; destruct inp; simpl; auto.
+  unfold findMin. simpl.
+  destruct x; simpl.
+  intros; unfold count; simpl; auto.
+  destruct b.
   intros.
+  simpl in w. destruct w.
+  simpl in f.
+  destruct same; simpl.
+  unfold count; simpl.
+  remember (x0 y a) as ya; destruct ya.
+  omega.
+  intros.
+  destruct x; simpl in *.
+  destruct f.
+  eapply findMinAll; eauto.
+  rewrite <- Heqya; auto.
+  eapply findMinAll; eauto.
+  destruct f; eauto.
+  rewrite <- Heqya; auto.
+Qed.
 
   Parameter extractMinCount :
     forall inp,
