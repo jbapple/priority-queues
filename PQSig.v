@@ -85,6 +85,8 @@ Module Type PQVerify.
             count same y z = count same y (deleteMin inp)
       end.
 
+(* TODO: extractList *)
+
   Parameter deleteMinCount :
     forall inp,
       match findMin inp with
