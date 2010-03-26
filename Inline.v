@@ -1363,6 +1363,10 @@ Ltac lisp := simpl in *;
         _ : false = OO.LEQ ?a ?c 
         |- true = OO.LEQ ?c ?b] => 
     assert (true = OO.LEQ c a); lisp
+    |  [_ : true = OO.LEQ ?a ?b , 
+        _ : false = OO.LEQ ?c ?b 
+        |- true = OO.LEQ ?a ?c] => 
+    assert (true = OO.LEQ b c); lisp
     |  [_ : false = OO.LEQ ?a ?b , 
         _ : false = OO.LEQ ?b ?c 
         |- true = OO.LEQ ?c ?a] => 
@@ -1526,29 +1530,6 @@ Qed.
 Hint Resolve skewLinkHeap.
 
 
-Lemma insHeap : 
-  forall x xs,
-    minHeap x ->
-    listHeap xs ->
-    listHeap (ins x xs).
-Proof.
-  intros x xs.
-  generalize dependent x.
-  induction xs; intros; auto.
-    simpl; auto. simpl; auto.
-    inversion H0; subst. inversion H1; subst.
-    simpl.
-    rename p into a.
-    remember (nat_compare (rank x) (rank a)) as xa; destruct xa; auto.
-    apply IHxs; auto. eapply linkHeap; auto.
-    exists x0. auto.
-    exists x0; eauto.
-    eapply IHxs. eapply linkHeap; auto.
-    exists x0. auto.
-    exists x0; eauto.
-Qed.
-
-
  Require Import ZArith.
  Require Import Coq.Init.Datatypes.
  Open Scope Z_scope.
@@ -1664,6 +1645,328 @@ Proof.
   induction p; lisp.
   destruct r0; lisp.
 Qed.
+
+Print preT'.
+
+Lemma noneHeap :
+  (forall x, 
+    feapT OO.LEQ None x ->
+    exists y, feapT OO.LEQ (Some y) x)
+  /\ (forall x, 
+    feapR OO.LEQ None x ->
+    exists y, feapR OO.LEQ (Some y) x)
+  /\ (forall x, 
+    forall z zs,
+      z:::zs = x ->
+      feapM OO.LEQ None x ->
+      exists y, feapM OO.LEQ (Some y) x).
+Proof.
+  apply all_ind; lisp; intros; lisp.
+  apply H in H1. destruct H1. exists x. lisp.
+  exists a; lisp.
+  inversion H.
+  apply H in H2. destruct H2.
+  destruct m.
+  exists x; lisp.
+  eapply H0 in H3. Focus 2. eauto.
+  destruct H3.
+  pose (if OO.LEQ x x0 then x else x0) as y.
+  exists y. lisp.
+  eapply heapLess; eauto.
+  remember (OO.LEQ x x0) as xx0; destruct xx0; unfold y; lisp.
+  eapply heapLess; eauto.
+  remember (OO.LEQ x x0) as xx0; destruct xx0; unfold y; lisp.
+  eapply heapLess; eauto.
+  remember (OO.LEQ x x0) as xx0; destruct xx0; unfold y; lisp.
+Qed.
+
+Definition oomin  x y :=
+  if OO.LEQ x y
+    then x
+    else y.
+
+Lemma minLess :
+  forall x y,
+    true = OO.LEQ (oomin x y) x
+    /\ true = OO.LEQ (oomin x y) y.
+Proof.
+  intros; unfold oomin.
+  remember (OO.LEQ x y) as xy; destruct xy;
+    split; lisp.
+Qed.
+
+
+Lemma insHeapSome : 
+  forall x xs,
+    minHeap x ->
+    listHeap xs ->
+    exists b,
+      feapM OO.LEQ (Some b) (ins x xs).
+Proof.
+  intros x xs.
+  generalize dependent x.
+  induction xs; intros; auto.
+    lisp.  destruct x0.
+    exists a; lisp.
+    eapply noneHeap in H. destruct H.
+    exists x0; lisp.
+    lisp. 
+    destruct (nat_compare (rank x) (rank p)).
+    apply IHxs; eauto. apply linkHeap; eauto.
+    lisp.
+    destruct x0; destruct x1.
+    exists (oomin a a0); lisp.
+    apply heapLess with a; lisp; try apply minLess.
+    apply heapLess with a0; lisp; try apply minLess.
+    apply heapLess with a0; lisp; try apply minLess.
+    
+    eapply noneHeap in H0. destruct H0.
+    destruct xs.
+    exists (oomin a x0); lisp.
+    apply heapLess with a; lisp; try apply minLess.
+    apply heapLess with x0; lisp; try apply minLess.
+    eapply noneHeap in H1. destruct H1.
+    exists (oomin a (oomin x0 x1)); lisp.
+    apply heapLess with a; lisp; repeat (apply minLess).
+    apply heapLess with x0; lisp; 
+      apply OO.leqTransTrue with (oomin x0 x1);
+        apply minLess.
+    apply heapLess with x1; lisp; 
+      apply OO.leqTransTrue with (oomin x0 x1);
+        apply minLess.
+    apply heapLess with x1; lisp; 
+      apply OO.leqTransTrue with (oomin x0 x1);
+        apply minLess.
+    eauto.
+
+    eapply noneHeap in H. destruct H.
+    exists (oomin a x0); lisp.
+    apply heapLess with x0; lisp; try apply minLess.
+    apply heapLess with a; lisp; try apply minLess.
+    apply heapLess with a; lisp; try apply minLess.
+
+    eapply noneHeap in H; eapply noneHeap in H0.
+    destruct H; destruct H0.
+    destruct xs.
+    exists (oomin x1 x0); lisp.
+    apply heapLess with x0; lisp; try apply minLess.
+    apply heapLess with x1; lisp; try apply minLess.
+    eapply noneHeap in H1; destruct H1.
+    exists (oomin x2 (oomin x0 x1)); lisp.
+    apply heapLess with x0; lisp; 
+      apply OO.leqTransTrue with (oomin x0 x1);
+        apply minLess.
+    apply heapLess with x1; lisp; 
+      apply OO.leqTransTrue with (oomin x0 x1);
+        apply minLess.
+    apply heapLess with x2; lisp; repeat (apply minLess).
+    apply heapLess with x2; lisp; repeat (apply minLess).
+    eauto.
+    
+    eapply IHxs; lisp.
+    eapply linkHeap; lisp. eauto. eauto. eauto.
+Qed.
+
+Lemma insHeap : 
+  forall x xs,
+    minHeap x ->
+    listHeap xs ->
+    listHeap (ins x xs).
+Proof.
+  intros x xs.
+  generalize dependent x.
+  induction xs; intros; auto.
+    simpl; auto. simpl; auto.
+    inversion H0; subst. inversion H1; subst.
+    simpl.
+    rename p into a.
+    remember (nat_compare (rank x) (rank a)) as xa; destruct xa; auto.
+    apply IHxs; auto. eapply linkHeap; auto.
+    exists x0. auto.
+    exists x0; eauto.
+    eapply IHxs. eapply linkHeap; auto.
+    exists x0. auto.
+    exists x0; eauto.
+Qed.
+
+
+Lemma meldUniqHeapSome :
+  forall a x,
+    feapM OO.LEQ (Some a) x ->
+    forall y,
+      listHeap y ->
+      exists b, feapM OO.LEQ (Some b) (meldUniq (x,y)).
+Proof.
+  assert 
+    (let P := 
+      fun (xy:(preQ*preQ)) r =>
+        let (x,y) := xy in
+          forall a,
+          feapM OO.LEQ (Some a) x ->
+          listHeap y ->
+          exists b, feapM OO.LEQ (Some b) r
+            in forall xy, P xy (meldUniq xy)).
+  eapply meldUniq_ind; intros; lisp.
+  destruct y; lisp. eauto. Show Existentials.
+  destruct x. exists a0; lisp.
+  apply noneHeap in H0.
+  destruct H0.
+  destruct y.
+  exists x; lisp.
+  eapply noneHeap in H1. destruct H1.
+  exists (oomin x x0); lisp.
+  apply heapLess with x; lisp; try apply minLess.
+  apply heapLess with x0; lisp; try apply minLess.
+  apply heapLess with x0; lisp; try apply minLess.
+  eauto.
+  eauto.
+  Show Existentials.
+  edestruct H. eauto.
+  unfold listHeap; lisp.
+  eauto.
+  exists (oomin a x0); lisp.
+  apply heapLess with a; lisp; try apply minLess.
+  apply heapLess with x0; lisp; try apply minLess.
+  destruct x.
+  edestruct H. eauto. eauto.
+  exists (oomin x a0); lisp.
+  apply heapLess with a0; lisp; try apply minLess.
+  apply heapLess with x; lisp; try apply minLess.
+  apply noneHeap in H1. destruct H1.
+  destruct qs.
+  edestruct H. eauto. eauto.
+  exists (oomin x x0); lisp.
+  apply heapLess with x; lisp; try apply minLess.
+  apply heapLess with x0; lisp; try apply minLess.
+  eapply noneHeap in H3.
+  destruct H3.
+  edestruct H. eauto. eauto.
+  exists (oomin x x1); lisp.
+  apply heapLess with x; lisp; try apply minLess.
+  apply heapLess with x1; lisp; try apply minLess.
+  eauto.
+  eapply insHeapSome. eapply linkHeap; eauto. 
+  edestruct H. eauto. eauto. eauto.
+  intros. simpl in H.
+  pose (H (x,y)) as Hxy.
+  simpl in Hxy.
+  eapply Hxy. eauto. auto.
+Qed.
+
+Lemma meldUniqHeap :
+  forall a x,
+    feapM OO.LEQ (Some a) x ->
+    forall y,
+      listHeap y ->
+      exists b, feapM OO.LEQ (Some b) (meldUniq (x,y)).
+Proof.
+  assert 
+    (let P := 
+      fun (xy:(preQ*preQ)) r =>
+        let (x,y) := xy in
+          forall a,
+          feapM OO.LEQ (Some a) x ->
+          listHeap y ->
+          exists b, feapM OO.LEQ (Some b) r
+            in forall xy, P xy (meldUniq xy)).
+  eapply meldUniq_ind; intros; lisp.
+  destruct y; lisp. eauto. Show Existentials.
+  destruct x. exists a0; lisp.
+  apply noneHeap in H0.
+  destruct H0.
+  destruct y.
+  exists x; lisp.
+  eapply noneHeap in H1.
+  destruct H1.
+  pose (if OO.LEQ x x0 then x else x0) as b.
+  exists b; lisp.
+  eapply heapLess. Focus 2. eauto.
+  remember (OO.LEQ x x0) as xx0; destruct xx0; unfold b; lisp.
+  eapply heapLess. Focus 2. eauto.
+  remember (OO.LEQ x x0) as xx0; destruct xx0; unfold b; lisp.
+  eapply heapLess. Focus 2. eauto.
+  remember (OO.LEQ x x0) as xx0; destruct xx0; unfold b; lisp.
+  eauto. eauto.
+  apply H in H2.
+  destruct H2.
+  pose (if OO.LEQ x0 a then x0 else a) as b; exists b; lisp.
+  eapply heapLess. Focus 2. eauto.
+  remember (OO.LEQ x0 a) as xx0; destruct xx0; unfold b; lisp.
+  eapply heapLess. Focus 2. eauto.
+  remember (OO.LEQ x0 a) as xx0; destruct xx0; unfold b; lisp.
+  eauto.
+  unfold listHeap.
+  simpl. eauto.
+  assert (listHeap qs); eauto. 
+  pose (H _ (conj H0 H2) H4).
+  destruct e1.
+  destruct x.
+  pose (if OO.LEQ a0 x0 then a0 else x0) as b; exists b; lisp.
+  eapply heapLess. Focus 2. eauto.
+  remember (OO.LEQ a0 x0) as xx0; destruct xx0; unfold b; lisp.
+  eapply heapLess. Focus 2. eauto.
+  remember (OO.LEQ a0 x0) as xx0; destruct xx0; unfold b; lisp.
+  apply noneHeap in H1.
+  destruct H1.
+  rename x into a0.
+  pose (if OO.LEQ a0 x0 then a0 else x0) as b; exists b; lisp.
+  eapply heapLess. Focus 2. eauto.
+  remember (OO.LEQ a0 x0) as xx0; destruct xx0; unfold b; lisp.
+  eapply heapLess. Focus 2. eauto.
+  remember (OO.LEQ a0 x0) as xx0; destruct xx0; unfold b; lisp.
+
+  apply H in H1.
+  destruct H1.
+  pose (if OO.LEQ x0 a then x0 else a) as b; exists b; lisp.
+  eapply heapLess. Focus 2. eauto.
+  remember (OO.LEQ x0 a) as xx0; destruct xx0; unfold b; lisp.
+  eapply heapLess. Focus 2. eauto.
+  remember (OO.LEQ x0 a) as xx0; destruct xx0; unfold b; lisp.
+  eauto.
+  unfold listHeap.
+  simpl. eauto.
+  
+  lisp.
+
+  
+  lis
+
+  remember (OO.LEQ x x0) as xx0; destruct xx0; unfold b; lisp
+  
+  destruct y; lisp. eapply noneHeap.
+  assert (exists b, feapT OO.LEQ (Some b) p) as bp.
+  destruct x; eauto.
+  apply noneHeap.
+  
+  inversion H0; subst.
+  apply Cons; auto. inversion H2; subst; eauto.
+  inversion H1; subst.
+  apply H; auto.
+  inversion H2; subst; auto.
+  eauto.
+  apply Cons.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H2; subst; eauto.
+  apply H; auto.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H2; subst; eauto.
+  apply insHeap; eauto.
+  eapply linkHeap; eauto.
+  inversion H0; eauto.
+  inversion H2; subst; eauto.
+  inversion H1; eauto.
+  inversion H2; subst; eauto.
+  eapply H.
+  inversion H0; eauto.
+  inversion H2; subst; eauto.
+  inversion H1; eauto.
+  inversion H2; subst; eauto.
+  simpl in H.
+  intros x y.
+  pose (H (x, y)) as I.
+  eapply I; auto.
+Qed.
+
 
 Lemma meldUniqHeap :
   forall x y,
@@ -2635,15 +2938,90 @@ Proof.
   rewrite <- Heqya; auto.
 Qed.
 
-  Parameter extractMinCount :
-    forall inp,
-      match findMin inp with
-        | None => None = extractMin inp
-        | Some x => exists z,
-          Some (x,z) = extractMin inp
-          /\ forall same y,
-            count same y z = count same y (deleteMin inp)
-      end.
+Program Definition meld : PQ -> PQ -> PQ := preMeld.
+Next Obligation.
+  destruct x; destruct x0; unfold wrapHeap; simpl.
+  destruct x; destruct x0; simpl; auto.
+  destruct b. unfold wrapHeap in *. auto.
+  destruct b; destruct b0; simpl.
+  unfold wrapHeap in *.
+  destruct w; destruct w0.
+  remember (LEQ a a0) as aa0; destruct aa0;
+    unfold rootHeap; simpl;
+      exists None; split; auto;
+        eapply SBH.preInsertHeapLess; eauto.
+  destruct m0; simpl in *; repeat split.
+  Focus 5.
+  destruct m; simpl in *; repeat split.
+  destruct H.
+  destruct H1. eauto.
+  destruct H.
+  destruct H1. eauto.
+  eauto. auto.
+  destruct H0. destruct H1; auto.
+  destruct H0. destruct H1; auto.
+  rewrite <- leqRefl; auto.
+  destruct m; simpl in *; repeat split. Focus 5.
+  destruct m0; simpl in *; repeat split.
+  destruct H0. destruct H1; eauto.
+  destruct H0. destruct H1; eauto.
+  Focus 4.
+  destruct H. destruct H1. lisp.
+  Focus 3. lisp.
+  eapply leqSymm. eauto.
+  eapply leqSymm. eauto.
+  rewrite <- leqRefl; auto.
+Qed.
+
+Lemma meldCount :
+  forall same inp inq x,
+    count same x (meld inp inq) 
+    = count same x inp
+    + count same x inq.
+Proof.
+  intros; destruct inp; destruct inq; destruct same; unfold count; lisp.
+  unfold preCount; simpl.
+  destruct x0; destruct x1; simpl; lisp.
+  destruct b; lisp.
+  destruct b as [v c]; destruct b0 as [w d0]; lisp.
+  remember (LEQ v w) as vw; destruct vw; simpl;
+    rewrite insertCountM; simpl; 
+      remember (x2 x v) as xv; destruct xv;
+        remember (x2 x w) as xw; destruct xw;
+          try omega.
+Qed.
+
+Definition extractMin (x:PQ) : option (A*PQ).
+refine (fun x =>
+  match x with
+    | exist x _ => 
+      match preExtractMin x as j return ((j=preExtractMin x) -> option (A*PQ)) with
+        | None => fun _ => None
+        | Some (a,b) => fun _ => Some (a,exist _ b _)
+      end eq_refl
+  end).
+destruct x0. simpl in _H. inversion _H.
+destruct b0. simpl in *.
+inversion_clear _H; subst.
+remember (SBH.preExtractMin m) as mm; destruct mm.
+destruct p0.
+destruct r. unfold wrapHeap.
+unfold rootHeap; simpl. exists None; split; auto.
+Focus 2. eauto.
+
+destruct m; simpl; auto.
+remember (SBH.getMin p0 m) as p0m; destruct p0m
+
+
+Parameter extractMinCount :
+  forall inp,
+    match findMin inp with
+      | None => None = extractMin inp
+      | Some x => exists z,
+        Some (x,z) = extractMin inp
+        /\ forall same y,
+          count same y z = count same y (deleteMin inp)
+    end.
 
 (* TODO: extractList *)
 
@@ -2660,10 +3038,6 @@ Qed.
                 else newCount
       end.
 
-  Parameter meldCount :
-    forall same inp inq x,
-      count same x (meld inp inq) = count same x inp
-                                  + count same x inq.
 
 
 Inductive rankT : preT -> Prop :=
