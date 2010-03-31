@@ -48,6 +48,31 @@ Notation "[[ x | .. | y ]]" := (nons x .. (nons y cil) ..).
 Notation "a ::: b" := (nons a b) (at level 60, right associativity).
 Notation "$" := cil (at level 60).
 
+Definition root A (x:Root A) :=
+  match x with
+    | Top v _ => v
+  end.
+
+Definition toot A (x:preT' A) :=
+  match x with
+    | Node v _ _ => root v
+  end.
+
+Fixpoint toListT A (x:preT' A) (r:list A) {struct x} : list A :=
+  match x with
+    | Node h _ t => toListR h (toListM t r)
+  end
+with toListR (A:Type) (x:Root A) r :=
+  match x with
+    | Top v t => toListM t (v::r)
+  end
+with toListM (A:Type) (x:ml A) r : list A :=
+  match x with
+    | cil => r
+    | nons h t => toListT h (toListM t r)
+  end.
+
+
 (*
 Locate "$".
 Locate "[]".
@@ -61,6 +86,7 @@ Check (let x := Node (Top 1 cil) 0 cil in [[ x | x ]]).
 
 Combined Scheme all_ind from preT'_w, Root_w, ml_w.
 
+(*
 Inductive heapT A (leq:A->A->bool) v : preT' A -> Prop :=
   theap : forall w c d n,
           heapR leq v (Top w c) ->
@@ -77,6 +103,50 @@ with heapM A (leq:A->A->bool) v : ml A -> Prop :=
           heapT leq v x ->
           heapM leq v xs ->
           heapM leq v (x:::xs).
+*)
+
+Fixpoint feapT A (leq:A->A->bool) v (x:preT' A) {struct x} : Prop :=
+  match x with
+    | Node wc n d =>
+      feapR leq v wc
+      /\ match wc with
+           | Top w c => feapM leq w d
+         end
+  end
+with feapR A (leq:A->A->bool) v (x:Root A) {struct x} : Prop :=
+  match x with
+    | Top w c => true = leq v w /\ feapM leq w c
+  end
+with feapM A (leq:A->A->bool) v (x:ml A) {struct x} : Prop :=
+  match x with
+    | ($) => True
+    | x:::xs => feapT leq v x /\ feapM leq v xs
+  end.
+
+(*
+Fixpoint feapT A (leq:A->A->bool) v (x:preT' A) {struct x} : Prop :=
+  match x with
+    | Node wc n d =>
+      feapR leq v wc
+      /\ match wc with
+           | Top w c => feapM leq (Some w) d
+         end
+  end
+with feapR A (leq:A->A->bool) v (x:Root A) {struct x} : Prop :=
+  match x with
+    | Top w c => true = leq v w /\ feapM leq (Some w) c
+  end
+with feapM A (leq:A->A->bool) v (x:ml A) {struct x} : Prop :=
+  match x with
+    | ($) => True
+    | x:::xs => 
+      match v with
+        | Some w => feapT leq w x /\ feapM leq (Some w) xs
+        | None => False
+      end
+  end.
+
+Check feapT. Check feapR. Check feapM.
 
 Fixpoint feapT A (leq:A->A->bool) v (x:preT' A) {struct x} : Prop :=
   match x with
@@ -102,6 +172,7 @@ with feapM A (leq:A->A->bool) v (x:ml A) {struct x} : Prop :=
       feapT leq v x
       /\ feapM leq v xs
   end.
+*)
 
 (*
 Functional Scheme feapT_ind := Induction for feapT Sort Prop
@@ -109,6 +180,7 @@ with feapR_ind := Induction for feapR Sort Prop
 with feapM_ind := Induction for feapM Sort Prop.
 *)
 
+(*
 Function weapT (A:Type) (leq:A->A->bool) (v:A) (x:preT' A) {struct x} : Prop :=
   match x with
     | Node wc n d =>
@@ -132,11 +204,13 @@ with weapM (A:Type) (leq:A->A->bool) (v:A) (x:ml A) {struct x} : Prop :=
   end.
 
 Check weapT_equation.
+*)
 
 (*
 Functional Scheme weapT_ind := Induction for weapT Sort Prop.
 *)
 
+(*
 Hint Constructors heapT.
 Hint Constructors heapR.
 Hint Constructors heapM.
@@ -150,10 +224,11 @@ with heapR_w := Induction for heapR Sort Prop
 with heapM_w := Induction for heapM Sort Prop.
 
 Combined Scheme heap_ind from heapT_w, heapR_w, heapM_w.
+*)
 
 Module RootOrd (OO:Order) <: Order.
 
-  Definition A := {x:Root OO.A | feapR OO.LEQ None x}.
+  Definition A := {x:Root OO.A | feapR OO.LEQ (root x) x}.
 
   Definition LEQ (x y:A) :=
     match x,y with
@@ -1323,9 +1398,9 @@ Inductive All t (p:t -> Prop) : list t -> Prop :=
 Hint Constructors All.
 *)
 
-Definition minHeap x := exists v, feapT OO.LEQ v x.
-Definition rootHeap x := exists v, feapR OO.LEQ v x.
-Definition listHeap x := exists v, feapM OO.LEQ v x.
+Definition minHeap := feapT OO.LEQ.
+Definition rootHeap := feapR OO.LEQ.
+Definition listHeap := feapM OO.LEQ.
 
 Hint Unfold minHeap.
 Hint Unfold rootHeap.
@@ -1341,9 +1416,9 @@ Qed.
 Hint Resolve Nil.
 *)
 
-Lemma Nil : listHeap ($).
+Lemma Nil : forall x, listHeap x ($).
 Proof.
-  exists (@None OO.A). simpl. auto.
+  unfold listHeap. simpl. auto.
 Qed.
 Hint Resolve Nil.
 
@@ -1351,9 +1426,9 @@ Ltac lisp := simpl in *;
   match goal with
     | [ H : _ /\ _ |- _ ] => destruct H; lisp
     | [ |- _ /\ _ ] => split; lisp
-    | [ H : minHeap _ |- _ ] => destruct H; lisp
+(*    | [ H : minHeap _ |- _ ] => destruct H; lisp
     | [ H : rootHeap _ |- _ ] => destruct H; lisp
-    | [ H : listHeap _ |- _ ] => destruct H; lisp
+    | [ H : listHeap _ |- _ ] => destruct H; lisp *)
     | [ _ : false = OO.LEQ ?a ?b |- true = OO.LEQ ?b ?a] 
       => apply OO.leqSymm; auto; lisp
     |  [_ : true = OO.LEQ ?a ?b , 
@@ -1380,11 +1455,80 @@ Ltac lisp := simpl in *;
     | _ => auto
   end.
 
-
 Set Maximal Implicit Insertion.
 Implicit Arguments None [A].
 Unset Maximal Implicit Insertion.
 
+
+Definition oomin  x y :=
+  if OO.LEQ x y
+    then x
+    else y.
+
+Lemma minLess :
+  forall x y,
+    true = OO.LEQ (oomin x y) x
+    /\ true = OO.LEQ (oomin x y) y.
+Proof.
+  intros; unfold oomin.
+  remember (OO.LEQ x y) as xy; destruct xy;
+    split; lisp.
+Qed.
+
+(*
+Definition compt x y :=
+  match x with
+    | Some p => 
+      match y with
+        | Some q => 
+          if OO.LEQ p q
+            then Some p
+            else Some q
+        | None => Some p
+      end
+    | None => y
+  end.
+Hint Unfold compt.
+*)
+
+Lemma heapLess :
+  (forall x a b, 
+    true = OO.LEQ a b -> 
+    minHeap b x -> 
+    minHeap a x)
+  /\ (forall x a b, 
+    true = OO.LEQ a b -> 
+    rootHeap b x -> 
+    rootHeap a x)
+  /\ (forall x a b, 
+    true = OO.LEQ a b -> 
+    listHeap b x -> 
+    listHeap a x).
+Proof.
+  unfold minHeap; unfold rootHeap; unfold listHeap.
+  apply all_ind; intros; lisp.
+  eapply H; eauto.
+  eapply H; eauto.
+  eapply H0; eauto.
+Qed.
+
+Lemma Cons : 
+  forall xs a x b, 
+    minHeap a x ->
+    listHeap b xs ->
+    listHeap (oomin a b) (x:::xs).
+Proof.
+  simpl.
+  unfold listHeap; unfold minHeap.
+  induction xs as [|y ys I]; simpl; intros a x b X XS; lisp.
+
+  eapply heapLess with a; lisp; apply minLess.
+  eapply heapLess with a; lisp; apply minLess.
+  eapply heapLess with b; lisp; apply minLess.
+  eapply heapLess with b; lisp; apply minLess.
+Qed.
+
+(*
 Lemma Cons : 
   forall xs x, 
     minHeap x ->
@@ -1448,35 +1592,57 @@ Proof.
   lisp; lisp; lisp.
 Qed.
 Hint Resolve Cons.  
+*)
 
 Lemma lone : 
-  forall v n, 
-    rootHeap v ->
-    minHeap (Node v n ($)).
+  forall a v n, 
+    rootHeap a v ->
+    exists b, minHeap b (Node v n ($)).
 Proof.
   unfold rootHeap; unfold minHeap; intros.
-  destruct H as [w R].
   destruct v as [x c].
-  exists (Some x).
+  exists x.
   lisp.
 Qed.
 Hint Resolve lone.
 
-Lemma top : forall v n n' w m m' p ys,
-  minHeap (Node v n ys) ->
+Lemma top : forall a b v n n' w m m' p ys,
+  minHeap a (Node v n ys) ->
   true = preLEQ v w ->
-  minHeap (Node w m' p) ->
-  minHeap (Node v n' ((Node w m p) ::: ys)).
+  minHeap b (Node w m' p) ->
+  minHeap (oomin a b) (Node v n' ((Node w m p) ::: ys)).
 Proof.
-  intros.
-  destruct v as [r i c].
-  exists (Some r). lisp.
-  destruct i; lisp. 
-  destruct w; lisp.
+  intros. unfold minHeap in *. lisp.
+  destruct v as [r i c]. lisp.
+  apply OO.leqTransTrue with a; auto. apply minLess.
+  destruct v; lisp.
   destruct w; lisp.
 Qed.
 Hint Resolve top.
 
+Lemma linkHeap :
+  forall v x w y, 
+    minHeap v x -> 
+    minHeap w y -> 
+    minHeap (oomin v w) (link x y).
+Proof.
+  intros v x w y X Y.
+  unfold link.
+  destruct x as [vv n p]; destruct y as [ww m q].
+  unfold minHeap in *; lisp.
+  remember (preLEQ vv ww) as vw; destruct vw.
+  unfold minHeap; lisp.
+  lisp. apply heapLess with v. apply minLess. auto.
+  destruct vv; lisp.
+  destruct ww; lisp.
+  lisp.
+  apply heapLess with w; auto; apply minLess.
+  destruct ww; lisp.
+  destruct vv; lisp.
+Qed.
+Hint Resolve linkHeap.
+
+(*
 Lemma linkHeap :
   forall x y, minHeap x -> minHeap y -> minHeap (link x y).
 Proof.
@@ -1487,93 +1653,82 @@ Proof.
   apply preleqSymm; auto.
 Qed.
 Hint Resolve linkHeap.
+*)
 
 Lemma skewLinkHeap :
-  forall x y z, rootHeap x -> minHeap y -> minHeap z -> 
-    minHeap (skewLink (Node x 0 ($)) y z).
+  forall R x U y T z, 
+    rootHeap R x -> 
+    minHeap T y -> 
+    minHeap U z -> 
+    minHeap (oomin R (oomin U T)) (skewLink (Node x 0 ($)) y z).
 Proof.
-  intros x y z X Y Z.
-  unfold skewLink.
+  unfold rootHeap; unfold minHeap; unfold skewLink.
+  intros R x T y U z X Y Z.
   rename x into a.
   destruct y as [b j q]; destruct z as [c k r].
-  unfold rank in *; subst.
   remember (preLEQ a b) as ab; destruct ab; simpl.
   Case "a <= b".
-    remember (preLEQ a c) as ac; destruct ac; simpl.
+    remember (preLEQ a c) as ac; destruct ac; lisp.
     SCase "a <= c".
-      lisp. destruct b; destruct c; lisp.
-      destruct a; lisp.
-      exists (Some a); lisp.
+      apply heapLess with R; auto. apply minLess.
+      destruct a; lisp. destruct b; destruct c; lisp.
+      destruct b; destruct c; lisp.
+      apply heapLess with T; auto.
+      apply OO.leqTransTrue with (oomin T U); apply minLess.
     SCase "a > c".
-      assert (true = preLEQ c a). apply preleqSymm; auto.
-      destruct c. exists (Some a0).
-      lisp. 
-      destruct a; lisp.
-      destruct b; lisp.
-      destruct a; lisp.
+      destruct c; lisp.
+      destruct a. unfold preLEQ in *.
+      destruct b. lisp. destruct b. lisp.
+      unfold preLEQ in *. destruct a. lisp.
   Case "b > a".
-    assert (true = preLEQ b a). apply preleqSymm; auto.
-    remember (preLEQ b c) as bc; destruct bc; simpl.
+    remember (preLEQ b c) as bc; destruct bc; lisp.
     SCase "b <= c".
-      destruct c; lisp.
-      destruct b; lisp.
-      exists (Some a1); lisp.
-      
-      destruct a; lisp.
-      destruct a; auto.
+      apply heapLess with U; auto.
+      apply OO.leqTransTrue with (oomin T U); apply minLess.
     SCase "b > c".
-      assert (true = preLEQ c b). apply preleqSymm; auto.
+      destruct b; lisp. destruct c; lisp.
+      unfold preLEQ in *. destruct a; lisp.
+      destruct c; lisp. destruct b; lisp. destruct c; lisp.
+      unfold preLEQ in *; lisp. destruct a; lisp.
+      apply OO.leqTransTrue with (oomin T U); try (apply minLess).
+      apply OO.leqTransTrue with T; auto; try (apply minLess).
       destruct c; lisp.
-      destruct b; lisp.
-      exists (Some a0); lisp.
+      unfold preLEQ in *; destruct b; lisp.
+      destruct a; lisp. destruct b; unfold preLEQ in *; lisp.
 Qed.
 Hint Resolve skewLinkHeap.
 
-
- Require Import ZArith.
- Require Import Coq.Init.Datatypes.
- Open Scope Z_scope.
- Require Import Coq.Init.Specif.
-
- Inductive test : Z -> Set :=
-   | up   : forall z, test (z+1) -> test z
-   | down : forall z, test  z    -> test (z+1).
-
-Program Definition next' (z:Z)(t:test z) : sum (test (z+1)) (test (z-1)) :=
-   match t with
-     | down r d => inr d
-     | up   r u => inl u
-   end.
-Next Obligation.
-  omega.
-Defined.
-
-Print next'.
-
-Print next'_obligation_1.
-
-Check all_ind.
-
-Lemma heapLess :
-  (forall x a b, 
-    true = OO.LEQ a b -> 
-    feapT OO.LEQ (Some b) x -> 
-    feapT OO.LEQ (Some a) x)
-  /\ (forall x a b, 
-    true = OO.LEQ a b -> 
-    feapR OO.LEQ (Some b) x -> 
-    feapR OO.LEQ (Some a) x)
-  /\ (forall x a b, 
-    true = OO.LEQ a b -> 
-    feapM OO.LEQ (Some b) x -> 
-    feapM OO.LEQ (Some a) x).
+Lemma preInsertHeapLess :
+  forall a x,
+    feapR OO.LEQ a x ->
+    forall b ys,
+      feapM OO.LEQ b ys ->
+      feapM OO.LEQ (oomin a b) (preInsert x ys).
 Proof.
-  apply all_ind; intros; lisp.
-  eapply H; eauto.
-  eapply H; eauto.
-  eapply H0; eauto.
+  intros a x X b ys P.
+  destruct ys; lisp.
+  apply heapLess with a; try apply minLess; auto.
+  destruct ys; lisp.
+  apply heapLess with a; try apply minLess; auto.
+  apply heapLess with b; try apply minLess; auto.
+  destruct p as [b0 j q]; lisp; destruct p0 as [c0 k r]; lisp.
+  remember (beq_nat j k) as jk; destruct jk; destruct x; lisp.
+  destruct b0; destruct c0; lisp.
+  remember (OO.LEQ a0 a1) as a01; destruct a01; lisp.
+  remember (OO.LEQ a0 a2) as a02; destruct a02; lisp.
+  apply OO.leqTransTrue with a; lisp. apply minLess.
+  apply OO.leqTransTrue with b; lisp. apply minLess.
+  remember (OO.LEQ a1 a2) as a12; destruct a12; lisp.
+  apply OO.leqTransTrue with b; lisp. apply minLess.
+  apply OO.leqTransTrue with b; lisp. apply minLess.
+  apply heapLess with b; try apply minLess; lisp.
+  apply OO.leqTransTrue with a; try apply minLess; lisp.
+  apply heapLess with b; try apply minLess; lisp.
+  apply heapLess with b; try apply minLess; lisp.
+  apply heapLess with b; try apply minLess; lisp.
 Qed.
 
+(*
 Lemma preInsertHeapLess :
   forall a x,
     feapR OO.LEQ (Some a) x ->
@@ -1611,10 +1766,11 @@ Proof.
   apply heapLess with (b:= b); lisp.
   remember (OO.LEQ a b) as ab; destruct ab; subst; lisp.
 Qed.
+*)
 
-
+(*
 Lemma preInsertHeap :
-  forall x ys,
+  forall a x b ys,
     rootHeap x ->
     listHeap ys ->
     listHeap (preInsert x ys).
@@ -1647,7 +1803,9 @@ Proof.
 Qed.
 
 Print preT'.
+*)
 
+(*
 Lemma noneHeap :
   (forall x, 
     feapT OO.LEQ None x ->
@@ -1694,79 +1852,43 @@ Proof.
   remember (OO.LEQ x y) as xy; destruct xy;
     split; lisp.
 Qed.
-
+*)
 
 Lemma insHeapSome : 
-  forall x xs,
-    minHeap x ->
-    listHeap xs ->
-    exists b,
-      feapM OO.LEQ (Some b) (ins x xs).
+  forall a x b xs,
+    minHeap a x ->
+    listHeap b xs ->
+    listHeap (oomin a b) (ins x xs).
 Proof.
-  intros x xs.
-  generalize dependent x.
+  intros a x b xs.
+  generalize dependent x;
+    generalize dependent a; generalize dependent b.
   induction xs; intros; auto.
-    lisp.  destruct x0.
-    exists a; lisp.
-    eapply noneHeap in H. destruct H.
-    exists x0; lisp.
-    lisp. 
+    unfold listHeap; lisp. apply heapLess with a; auto.
+    apply minLess.
+    
+    unfold listHeap in *; lisp.
     destruct (nat_compare (rank x) (rank p)).
-    apply IHxs; eauto. apply linkHeap; eauto.
+    
+    apply heapLess with (oomin (oomin a b) b).
+    unfold oomin. remember (OO.LEQ a b) as ab; destruct ab; lisp.
+    rewrite <- Heqab; lisp.
+    rewrite <- OO.leqRefl; lisp.
+    apply IHxs; auto.
+    
     lisp.
-    destruct x0; destruct x1.
-    exists (oomin a a0); lisp.
-    apply heapLess with a; lisp; try apply minLess.
-    apply heapLess with a0; lisp; try apply minLess.
-    apply heapLess with a0; lisp; try apply minLess.
-    
-    eapply noneHeap in H0. destruct H0.
-    destruct xs.
-    exists (oomin a x0); lisp.
-    apply heapLess with a; lisp; try apply minLess.
-    apply heapLess with x0; lisp; try apply minLess.
-    eapply noneHeap in H1. destruct H1.
-    exists (oomin a (oomin x0 x1)); lisp.
-    apply heapLess with a; lisp; repeat (apply minLess).
-    apply heapLess with x0; lisp; 
-      apply OO.leqTransTrue with (oomin x0 x1);
-        apply minLess.
-    apply heapLess with x1; lisp; 
-      apply OO.leqTransTrue with (oomin x0 x1);
-        apply minLess.
-    apply heapLess with x1; lisp; 
-      apply OO.leqTransTrue with (oomin x0 x1);
-        apply minLess.
-    eauto.
+    apply heapLess with a; auto; try apply minLess.
+    apply heapLess with b; auto; try apply minLess.
+    apply heapLess with b; auto; try apply minLess.
 
-    eapply noneHeap in H. destruct H.
-    exists (oomin a x0); lisp.
-    apply heapLess with x0; lisp; try apply minLess.
-    apply heapLess with a; lisp; try apply minLess.
-    apply heapLess with a; lisp; try apply minLess.
-
-    eapply noneHeap in H; eapply noneHeap in H0.
-    destruct H; destruct H0.
-    destruct xs.
-    exists (oomin x1 x0); lisp.
-    apply heapLess with x0; lisp; try apply minLess.
-    apply heapLess with x1; lisp; try apply minLess.
-    eapply noneHeap in H1; destruct H1.
-    exists (oomin x2 (oomin x0 x1)); lisp.
-    apply heapLess with x0; lisp; 
-      apply OO.leqTransTrue with (oomin x0 x1);
-        apply minLess.
-    apply heapLess with x1; lisp; 
-      apply OO.leqTransTrue with (oomin x0 x1);
-        apply minLess.
-    apply heapLess with x2; lisp; repeat (apply minLess).
-    apply heapLess with x2; lisp; repeat (apply minLess).
-    eauto.
-    
-    eapply IHxs; lisp.
-    eapply linkHeap; lisp. eauto. eauto. eauto.
+    apply heapLess with (oomin (oomin a b) b).
+    unfold oomin. remember (OO.LEQ a b) as ab; destruct ab; lisp.
+    rewrite <- Heqab; lisp.
+    rewrite <- OO.leqRefl; lisp.
+    apply IHxs; auto.
 Qed.
 
+(*
 Lemma insHeap : 
   forall x xs,
     minHeap x ->
@@ -1788,186 +1910,139 @@ Proof.
     exists x0. auto.
     exists x0; eauto.
 Qed.
+*)
 
+(*
+Definition notBothNil (x y:ml OO.A) :=
+  match x,y with
+    | ($),($) => false
+    | _,_ => true
+  end.
+Hint Unfold notBothNil.
+*)
 
 Lemma meldUniqHeapSome :
-  forall a x,
-    feapM OO.LEQ (Some a) x ->
-    forall y,
-      listHeap y ->
-      exists b, feapM OO.LEQ (Some b) (meldUniq (x,y)).
+  forall a x b y,
+    listHeap a x ->
+    listHeap b y ->
+    listHeap (oomin a b) (meldUniq (x,y)).
 Proof.
   assert 
     (let P := 
       fun (xy:(preQ*preQ)) r =>
         let (x,y) := xy in
-          forall a,
-          feapM OO.LEQ (Some a) x ->
-          listHeap y ->
-          exists b, feapM OO.LEQ (Some b) r
+          forall a b,
+          listHeap a x ->
+          listHeap b y ->
+          listHeap (oomin a b) r
             in forall xy, P xy (meldUniq xy)).
   eapply meldUniq_ind; intros; lisp.
-  destruct y; lisp. eauto. Show Existentials.
-  destruct x. exists a0; lisp.
-  apply noneHeap in H0.
-  destruct H0.
-  destruct y.
-  exists x; lisp.
-  eapply noneHeap in H1. destruct H1.
-  exists (oomin x x0); lisp.
-  apply heapLess with x; lisp; try apply minLess.
-  apply heapLess with x0; lisp; try apply minLess.
-  apply heapLess with x0; lisp; try apply minLess.
-  eauto.
-  eauto.
-  Show Existentials.
-  edestruct H. eauto.
-  unfold listHeap; lisp.
-  eauto.
-  exists (oomin a x0); lisp.
-  apply heapLess with a; lisp; try apply minLess.
-  apply heapLess with x0; lisp; try apply minLess.
-  destruct x.
-  edestruct H. eauto. eauto.
-  exists (oomin x a0); lisp.
-  apply heapLess with a0; lisp; try apply minLess.
-  apply heapLess with x; lisp; try apply minLess.
-  apply noneHeap in H1. destruct H1.
-  destruct qs.
-  edestruct H. eauto. eauto.
-  exists (oomin x x0); lisp.
-  apply heapLess with x; lisp; try apply minLess.
-  apply heapLess with x0; lisp; try apply minLess.
-  eapply noneHeap in H3.
-  destruct H3.
-  edestruct H. eauto. eauto.
-  exists (oomin x x1); lisp.
-  apply heapLess with x; lisp; try apply minLess.
-  apply heapLess with x1; lisp; try apply minLess.
-  eauto.
-  eapply insHeapSome. eapply linkHeap; eauto. 
-  edestruct H. eauto. eauto. eauto.
+  destruct y; lisp. 
+  apply heapLess with b; auto; apply minLess.
+  apply heapLess with a; auto; apply minLess.
+  unfold listHeap in *; lisp.
+  apply heapLess with a; auto; apply minLess.
+  unfold listHeap in *; lisp.
+  apply heapLess with b; auto; apply minLess.
+  unfold listHeap in *; lisp.
+  eapply heapLess. Focus 2.
+  apply insHeapSome. apply linkHeap; eauto.
+  apply H; eauto.
+  unfold oomin. 
+  remember (OO.LEQ a b) as ab; destruct ab; 
+    try rewrite <- OO.leqRefl; lisp.
+
   intros. simpl in H.
   pose (H (x,y)) as Hxy.
   simpl in Hxy.
-  eapply Hxy. eauto. auto.
+  eapply Hxy. auto. eauto. 
 Qed.
 
-Lemma meldUniqHeap :
-  forall a x,
-    feapM OO.LEQ (Some a) x ->
-    forall y,
-      listHeap y ->
-      exists b, feapM OO.LEQ (Some b) (meldUniq (x,y)).
+(*
+Lemma meldUniqHeapSome :
+  forall a x b y,
+    listHeap a x ->
+    listHeap b y ->
+    listHeap (oomin a b) (meldUniq (x,y)).
 Proof.
   assert 
     (let P := 
       fun (xy:(preQ*preQ)) r =>
         let (x,y) := xy in
-          forall a,
-          feapM OO.LEQ (Some a) x ->
+          true = notBothNil x y ->
+          listHeap x ->
           listHeap y ->
           exists b, feapM OO.LEQ (Some b) r
             in forall xy, P xy (meldUniq xy)).
   eapply meldUniq_ind; intros; lisp.
-  destruct y; lisp. eauto. Show Existentials.
-  destruct x. exists a0; lisp.
-  apply noneHeap in H0.
-  destruct H0.
-  destruct y.
-  exists x; lisp.
-  eapply noneHeap in H1.
-  destruct H1.
-  pose (if OO.LEQ x x0 then x else x0) as b.
-  exists b; lisp.
-  eapply heapLess. Focus 2. eauto.
-  remember (OO.LEQ x x0) as xx0; destruct xx0; unfold b; lisp.
-  eapply heapLess. Focus 2. eauto.
-  remember (OO.LEQ x x0) as xx0; destruct xx0; unfold b; lisp.
-  eapply heapLess. Focus 2. eauto.
-  remember (OO.LEQ x x0) as xx0; destruct xx0; unfold b; lisp.
-  eauto. eauto.
-  apply H in H2.
-  destruct H2.
-  pose (if OO.LEQ x0 a then x0 else a) as b; exists b; lisp.
-  eapply heapLess. Focus 2. eauto.
-  remember (OO.LEQ x0 a) as xx0; destruct xx0; unfold b; lisp.
-  eapply heapLess. Focus 2. eauto.
-  remember (OO.LEQ x0 a) as xx0; destruct xx0; unfold b; lisp.
-  eauto.
-  unfold listHeap.
-  simpl. eauto.
-  assert (listHeap qs); eauto. 
-  pose (H _ (conj H0 H2) H4).
-  destruct e1.
-  destruct x.
-  pose (if OO.LEQ a0 x0 then a0 else x0) as b; exists b; lisp.
-  eapply heapLess. Focus 2. eauto.
-  remember (OO.LEQ a0 x0) as xx0; destruct xx0; unfold b; lisp.
-  eapply heapLess. Focus 2. eauto.
-  remember (OO.LEQ a0 x0) as xx0; destruct xx0; unfold b; lisp.
+  destruct y; lisp. 
+  inversion H. clear xy e H H0.
+  destruct x. exists a; lisp.
   apply noneHeap in H1.
   destruct H1.
-  rename x into a0.
-  pose (if OO.LEQ a0 x0 then a0 else x0) as b; exists b; lisp.
-  eapply heapLess. Focus 2. eauto.
-  remember (OO.LEQ a0 x0) as xx0; destruct xx0; unfold b; lisp.
-  eapply heapLess. Focus 2. eauto.
-  remember (OO.LEQ a0 x0) as xx0; destruct xx0; unfold b; lisp.
-
-  apply H in H1.
-  destruct H1.
-  pose (if OO.LEQ x0 a then x0 else a) as b; exists b; lisp.
-  eapply heapLess. Focus 2. eauto.
-  remember (OO.LEQ x0 a) as xx0; destruct xx0; unfold b; lisp.
-  eapply heapLess. Focus 2. eauto.
-  remember (OO.LEQ x0 a) as xx0; destruct xx0; unfold b; lisp.
+  destruct y.
+  exists x; lisp.
+  eapply noneHeap in H2. destruct H2.
+  exists (oomin x x1); lisp.
+  apply heapLess with x; lisp; try apply minLess.
+  apply heapLess with x1; lisp; try apply minLess.
+  apply heapLess with x1; lisp; try apply minLess.
+  eauto. destruct x; lisp. inversion H.
+  clear e xy H y H1.
+  destruct x1.
+  exists a; lisp.
+  apply noneHeap in H0. destruct H0.
+  destruct x.
+  exists x1; lisp.
+  eapply noneHeap in H2. destruct H2.
+  exists (oomin x1 x2); lisp.
+  apply heapLess with x1; lisp; try apply minLess.
+  apply heapLess with x2; lisp; try apply minLess.
+  apply heapLess with x2; lisp; try apply minLess.
   eauto.
-  unfold listHeap.
-  simpl. eauto.
-  
-  lisp.
+  edestruct H. unfold notBothNil. destruct ps; auto.
+  unfold listHeap; lisp.
+  eauto. unfold listHeap. lisp. eauto.
+  destruct x0.
+  exists (oomin a x1); lisp.
+  apply heapLess with a; lisp; try apply minLess.
+  apply heapLess with x1; lisp; try apply minLess.
+  apply noneHeap in H1. destruct H1.
+  exists (oomin x0 x1); lisp.
+  apply heapLess with x0; lisp; apply minLess.
+  apply heapLess with x1; lisp; apply minLess.
 
-  
-  lis
+  edestruct H; lisp.
+  unfold listHeap. lisp. eauto.
+  unfold listHeap. eauto.
+  destruct x.
+  exists (oomin a x1); lisp.
+  apply heapLess with a; lisp; try apply minLess.
+  apply heapLess with x1; lisp; try apply minLess.
+  apply noneHeap in H2. destruct H2.
+  exists (oomin x x1); lisp.
+  apply heapLess with x; lisp; apply minLess.
+  apply heapLess with x1; lisp; apply minLess.
 
-  remember (OO.LEQ x x0) as xx0; destruct xx0; unfold b; lisp
-  
-  destruct y; lisp. eapply noneHeap.
-  assert (exists b, feapT OO.LEQ (Some b) p) as bp.
-  destruct x; eauto.
-  apply noneHeap.
-  
-  inversion H0; subst.
-  apply Cons; auto. inversion H2; subst; eauto.
-  inversion H1; subst.
-  apply H; auto.
-  inversion H2; subst; auto.
-  eauto.
-  apply Cons.
-  inversion_clear H1; subst; eauto.
-  inversion_clear H2; subst; eauto.
-  apply H; auto.
-  inversion_clear H1; subst; eauto.
-  inversion_clear H2; subst; eauto.
-  apply insHeap; eauto.
-  eapply linkHeap; eauto.
-  inversion H0; eauto.
-  inversion H2; subst; eauto.
-  inversion H1; eauto.
-  inversion H2; subst; eauto.
-  eapply H.
-  inversion H0; eauto.
-  inversion H2; subst; eauto.
-  inversion H1; eauto.
-  inversion H2; subst; eauto.
-  simpl in H.
-  intros x y.
-  pose (H (x, y)) as I.
-  eapply I; auto.
+  eapply insHeapSome. eapply linkHeap; eauto.
+  destruct ps; destruct qs; lisp. rewrite meldUniq_equation. lisp.
+
+  rewrite meldUniq_equation; unfold listHeap; lisp; eauto.
+  rewrite meldUniq_equation; unfold listHeap; lisp; eauto.
+ 
+  edestruct H; lisp.
+  unfold listHeap. lisp; eauto.
+  unfold listHeap. lisp; eauto.
+  unfold listHeap. eauto.
+
+  intros. simpl in H.
+  pose (H (x,y)) as Hxy.
+  simpl in Hxy.
+  eapply Hxy. auto. eauto. auto.
 Qed.
+*)
 
-
+(*
 Lemma meldUniqHeap :
   forall x y,
     listHeap x ->
@@ -2011,6 +2086,62 @@ Proof.
   pose (H (x, y)) as I.
   eapply I; auto.
 Qed.
+*)
+
+Lemma preMeldHeapSome : 
+  forall a x b y,
+    listHeap a x ->
+    listHeap b y ->
+    listHeap (oomin a b) (preMeld x y).
+Proof.
+  intros a x b y xH yH.
+  unfold preMeld.
+
+  eapply meldUniqHeapSome.
+
+  destruct x; lisp.
+  apply heapLess with (oomin a a).
+  unfold oomin. rewrite <- OO.leqRefl; lisp.
+  unfold listHeap in xH. lisp.
+  apply insHeapSome; auto.
+
+  destruct y; lisp.
+  apply heapLess with (oomin b b).
+  unfold oomin. rewrite <- OO.leqRefl; lisp.
+  unfold listHeap in yH. lisp.
+  apply insHeapSome; auto.
+Qed.
+
+(*
+Lemma preMeldHeapSome : 
+  forall x y,
+    true = notBothNil x y ->
+    listHeap x ->
+    listHeap y ->
+    exists n, feapM OO.LEQ (Some n) (preMeld x y).
+Proof.
+  intros x y S xH yH.
+  unfold preMeld.
+
+  eapply meldUniqHeapSome.
+  destruct x; simpl in *.
+  clear xH yH; destruct y.
+  inversion S. clear S; generalize dependent p.
+  simpl. induction y; simpl; intros.
+  auto.
+  remember (nat_compare (rank p0) (rank p)) as pp0; destruct pp0.
+  apply IHy. auto. apply IHy.
+
+  clear xH yH S; generalize dependent p; generalize dependent y.
+  induction x; simpl; intros. auto.
+  remember (nat_compare (rank p0) (rank p)) as pp0; destruct pp0.
+  apply IHx. unfold notBothNil. auto.
+  apply IHx.
+  destruct x. auto.
+  simpl. apply insHeap; lisp. eauto. eauto.
+  destruct y. auto.
+  simpl. apply insHeap; lisp. eauto. eauto.
+Qed.
 
 Lemma preMeldHeap :
   forall x y,
@@ -2029,9 +2160,38 @@ Proof with auto.
  inversion_clear H; subst; eauto.
   inversion_clear H; subst; eauto.
 Qed.
+*)
 
 Lemma getMinTHeap :
-  forall x xs,
+  forall a x b xs,
+    minHeap a x ->
+    listHeap b xs ->
+    forall y z, (y,z) = getMin x xs ->
+      minHeap (oomin a b) y.
+Proof.
+  intros a x b xs;
+    generalize dependent x; generalize dependent a; generalize dependent b;
+      induction xs;
+        simpl; intros.
+  inversion_clear H1; subst; auto.
+  apply heapLess with a; auto; try apply minLess.
+  remember (getMin p xs) as tts; destruct tts; subst.
+  remember (preLEQ (root x) (root p0)) as xp; destruct xp.
+  inversion_clear H1; subst.
+  apply heapLess with a; auto; try apply minLess.
+  inversion_clear H1; subst.
+  unfold listHeap in H0; lisp.
+  assert (minHeap (oomin b b) p0).
+  eapply IHxs. Focus 3.
+  eauto. auto. auto.
+  unfold oomin in H2.
+  rewrite <- OO.leqRefl in H2.
+  apply heapLess with b; auto; try apply minLess.
+Qed.
+
+(*
+Lemma getMinTHeap :
+  forall a x b xs,
     minHeap x ->
     listHeap xs ->
     forall y z, (y,z) = getMin x xs ->
@@ -2053,7 +2213,60 @@ Proof.
   inversion_clear H1; subst; eauto.
   inversion_clear H1; subst; eauto.
 Qed.
+*)
 
+(*
+Definition oomax  x y :=
+  if OO.LEQ x y
+    then y
+    else x.
+
+Lemma maxMore :
+  forall x y,
+    true = OO.LEQ x (oomax x y)
+    /\ true = OO.LEQ y (oomax x y).
+Proof.
+  intros; unfold oomax.
+  remember (OO.LEQ x y) as xy; destruct xy;
+    split; lisp.
+Qed.
+*)
+
+Lemma getMinQHeap :
+  forall a x b xs,
+    minHeap a x ->
+    listHeap b xs ->
+    forall y z, (y,z) = getMin x xs ->
+(*
+      true = OO.LEQ (toot y) (toot x) /\
+      listHeap (toot y) xs /\
+*)
+      listHeap (oomin a b) z.
+Proof.
+  intros a x b xs;
+    generalize dependent x; generalize dependent a; generalize dependent b;
+      induction xs; simpl; intros; lisp.
+  inversion_clear H1; subst. lisp.
+  remember (getMin p xs) as tts; destruct tts.
+  remember (preLEQ (root x) (root p0)) as xp; destruct xp;
+    inversion_clear H1; subst.
+  destruct x; destruct p0; unfold listHeap in H0; lisp.
+  destruct r; destruct r0; unfold minHeap in H; lisp.
+  unfold listHeap; lisp.
+  apply heapLess with b; auto; try apply minLess.
+  apply heapLess with b; auto; try apply minLess.
+  
+  destruct x; destruct p0; unfold listHeap in H0; lisp.
+  destruct r; destruct r0; unfold minHeap in H; lisp.
+  unfold listHeap; lisp.
+  apply OO.leqTransTrue with a; lisp. try apply minLess.
+  eapply IHxs in Heqtts. Focus 2. eauto.
+  Focus 2. eauto.
+  unfold oomin in Heqtts. rewrite <- OO.leqRefl in Heqtts.
+  apply heapLess with b; auto; try apply minLess.
+Qed.
+
+(*
 Lemma getMinQHeap :
   forall x xs,
     minHeap x ->
@@ -2075,7 +2288,45 @@ Proof.
   inversion_clear H1; subst; eauto.
   inversion_clear H1; subst; eauto.
 Qed.
+*)
 
+Check split.
+
+Lemma splitHeap :
+  forall a x, listHeap a x ->
+    forall b y, listHeap b y ->
+      forall p q r, (p,q) = split x r y ->
+        listHeap (oomin a b) p.
+Proof.
+  intros a x XX b y.
+  generalize dependent a;
+    generalize dependent b; generalize dependent x.
+  induction y; simpl; lisp; intros.
+  inversion_clear H0; subst; auto.
+  apply heapLess with a; auto; try apply minLess.
+  destruct p as [i j k]; destruct j; simpl in *.
+  eapply IHy. Focus 3. eauto.
+  auto. unfold listHeap in H. lisp.
+  unfold listHeap in H. lisp.
+  destruct i; lisp.
+  assert (listHeap (oomin (oomin a a0) b) p0).
+  eapply IHy. Focus 2. auto.
+  Focus 2. eauto.
+  unfold listHeap; lisp.
+  apply minLess; auto.
+  apply heapLess with a; auto; apply minLess.
+  apply heapLess with (oomin (oomin a a0) b).
+  unfold oomin.
+  remember (OO.LEQ a b) as ab; destruct ab; lisp;
+    remember (OO.LEQ a a0) as aa0; destruct aa0; lisp.
+  rewrite <- Heqab; lisp.
+  remember (OO.LEQ a0 b) as a0b; destruct a0b; lisp.
+  rewrite <- Heqab; lisp.
+  remember (OO.LEQ a0 b) as a0b; destruct a0b; lisp.
+  auto.
+Qed.
+
+(*
 Lemma splitHeap :
   forall a, listHeap a ->
     forall b c, listHeap c ->
@@ -2098,6 +2349,7 @@ Proof.
   apply Cons; eauto. inversion_clear H1; subst; eauto.
   inversion_clear H1; subst; eauto.
 Qed.
+*)
 
 Fixpoint Each t (P:t -> Prop) l :=
   match l with
@@ -2106,6 +2358,74 @@ Fixpoint Each t (P:t -> Prop) l :=
   end.
 Hint Unfold Each.
 
+Lemma weakenEach :
+  forall t (P Q:t->Prop),
+    (forall x, P x -> Q x) ->
+    forall xs, Each P xs ->
+      Each Q xs.
+Proof.
+  intros t P Q PQ xs.
+  generalize dependent P;
+    generalize dependent Q.
+  induction xs; intros.
+  constructor.
+  lisp.
+  eapply IHxs. eauto. eauto.
+Qed.
+
+Lemma splitEach :
+  forall a x, listHeap a x ->
+    forall b y, Each (rootHeap b) y -> 
+      forall c z, listHeap c z ->
+        forall p q, (p,q) = split x y z ->
+          Each (rootHeap (oomin b c)) q.
+Proof.
+  intros a x XX b y YY c z.
+  generalize dependent a;
+    generalize dependent b;
+      generalize dependent c;  
+        generalize dependent x;
+          generalize dependent y.
+  induction z; simpl; intros; lisp.
+  inversion_clear H0; subst; auto.
+  eapply weakenEach with (rootHeap b); auto; intros.
+  apply heapLess with b; auto; apply minLess.
+  
+  destruct p as [i j k]; destruct j; simpl in *.
+  eapply IHz in H0.
+  Focus 2.
+  assert (Each (rootHeap (oomin b c)) (i::y)).
+  lisp. unfold listHeap in H.
+  lisp. 
+  apply heapLess with c; auto; apply minLess.
+  eapply weakenEach with (rootHeap b); auto; intros.
+  apply heapLess with b; auto; apply minLess.
+  eauto.
+  
+  Focus 3. unfold listHeap in H; lisp.
+  eauto.
+  eapply weakenEach with (rootHeap (oomin (oomin b c) c)); auto; intros.
+  apply heapLess with (oomin (oomin b c) c); auto.
+  unfold oomin.
+  remember (OO.LEQ b c) as bc; destruct bc; lisp;
+    try (rewrite <- Heqbc); lisp.
+  rewrite <- OO.leqRefl; lisp.
+  eauto.
+
+  eapply IHz in H0.
+  Focus 3.
+  assert (listHeap (oomin a c) ((Node i (S j) k):::x)).
+  lisp. unfold listHeap in H |- *.
+  lisp. 
+  apply heapLess with c; auto; apply minLess.
+  apply heapLess with a; auto; apply minLess.
+  eauto.
+  Focus 2. eauto.
+  Focus 2. unfold listHeap in *; lisp. eauto.
+  auto.
+Qed.
+
+(*
 Lemma splitEach :
   forall a, listHeap a ->
     forall b, Each rootHeap b -> 
@@ -2133,6 +2453,7 @@ Proof.
   inversion_clear H; subst; eauto.
   inversion_clear H1; subst; eauto.
 Qed.
+*)
 
 (*
 Lemma childrenHeap :
@@ -2162,10 +2483,278 @@ Qed.
 
 Hint Resolve OO.leqRefl.
 
+
 Lemma preDeleteMinHeap :
-  forall x,
-    listHeap x ->
-    listHeap (preDeleteMin x).
+  forall x v,
+    listHeap v x ->
+    listHeap v (preDeleteMin x).
+Proof.
+  intros x.
+  induction x; simpl; intros.
+  eauto. lisp.
+  rename p into a.
+  remember (getMin a x) as pt; destruct pt as [p t].
+  destruct p as [zz zzz c].
+  remember (split ($) [] c) as pq; destruct pq as [p q].
+
+  unfold listHeap in H.
+  lisp.
+  assert (oomin v v = v) as vvv.
+  unfold oomin; rewrite <- OO.leqRefl; lisp.
+  assert (listHeap v t) as vt.
+  rewrite <- vvv. 
+  eapply getMinQHeap. Focus 3. eauto.
+  auto. auto.
+  assert (listHeap v c) as vc.
+  eapply getMinTHeap in Heqpt.
+  Focus 2. eauto. Focus 2. eauto.
+  rewrite vvv in Heqpt. unfold minHeap in Heqpt.
+  lisp.
+  destruct zz; lisp.
+  apply heapLess with a0; lisp.
+  assert (listHeap v p) as vp.
+  eapply splitHeap with (a:=v) (b:=v) in Heqpq. rewrite vvv in Heqpq. auto.
+  lisp. lisp.
+  assert (Each (rootHeap v) q) as vq.
+  eapply splitEach with (a:=v) (b:=v) (c:= v) in Heqpq. 
+  rewrite vvv in Heqpq. auto. lisp. lisp. lisp.
+  clear Heqpq Heqpt.
+  generalize dependent t.
+  generalize dependent c.
+  generalize dependent p.
+  induction q; intros.
+  lisp. unfold preMeld.
+  unfold uniqify.
+  destruct t; destruct p; lisp;
+    rewrite meldUniq_equation; lisp.
+  rewrite <- vvv.
+  unfold listHeap in vp; lisp.
+  eapply insHeapSome; lisp.
+  remember (ins p0 t) as p0t; destruct p0t; lisp.
+  rewrite Heqp0t.
+  rewrite <- vvv.
+  unfold listHeap in vt; lisp.
+  eapply insHeapSome; lisp.
+  remember (ins p0 t) as p0t; destruct p0t; lisp.
+  unfold listHeap in vp; lisp.
+  rewrite <- vvv.
+  eapply insHeapSome; lisp.
+  remember (ins p p1) as pp1; destruct pp1; lisp.
+  rewrite Heqp0t.
+  unfold listHeap in vt; lisp.
+  rewrite <- vvv.
+  eapply insHeapSome; lisp.
+  destruct p2; destruct p3; lisp.
+  remember (nat_compare n n0) as nn0; destruct nn0; lisp.
+  rewrite <- vvv.
+  apply insHeapSome.
+  destruct r; destruct r0; lisp.
+  remember (OO.LEQ a0 a1) as a01; destruct a01; lisp.
+  unfold minHeap; lisp.
+  Check insHeapSome.
+  unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  unfold listHeap in vp; lisp.
+  assert (listHeap (oomin v v) (ins p p1)).
+  apply insHeapSome; auto.
+  rewrite <- Heqpp1 in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  unfold listHeap in vp; lisp.
+  assert (listHeap (oomin v v) (ins p p1)).
+  apply insHeapSome; auto.
+  rewrite <- Heqpp1 in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+  
+  unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  unfold minHeap; lisp.
+
+  unfold listHeap in vp; lisp.
+  assert (listHeap (oomin v v) (ins p p1)).
+  apply insHeapSome; auto.
+  rewrite <- Heqpp1 in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  unfold listHeap in vp; lisp.
+  assert (listHeap (oomin v v) (ins p p1)).
+  apply insHeapSome; auto.
+  rewrite <- Heqpp1 in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+
+  unfold listHeap in vp; lisp.
+  assert (listHeap (oomin v v) (ins p p1)).
+  apply insHeapSome; auto.
+  rewrite <- Heqpp1 in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  rewrite <- vvv.
+  eapply meldUniqHeapSome.
+
+  unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+
+  unfold listHeap in vp; lisp.
+  assert (listHeap (oomin v v) (ins p p1)).
+  apply insHeapSome; auto.
+  rewrite <- Heqpp1 in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  unfold listHeap; lisp.
+
+
+  unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  destruct r.
+
+
+  unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+rewrite <- vvv.
+  eapply meldUniqHeapSome.
+
+unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+
+  unfold listHeap in vp; lisp.
+  assert (listHeap (oomin v v) (ins p p1)).
+  apply insHeapSome; auto.
+  rewrite <- Heqpp1 in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  destruct r0.
+
+  unfold listHeap. lisp.
+  unfold listHeap. lisp.
+
+  unfold listHeap in vp; lisp.
+  assert (listHeap (oomin v v) (ins p p1)).
+  apply insHeapSome; auto.
+  rewrite <- Heqpp1 in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  destruct r0.
+
+
+  unfold listHeap in vp; lisp.
+  assert (listHeap (oomin v v) (ins p p1)).
+  apply insHeapSome; auto.
+  rewrite <- Heqpp1 in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+  
+  rewrite <- vvv.
+  apply meldUniqHeapSome. 
+  unfold listHeap; lisp.
+
+
+unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  destruct r.
+
+
+unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  
+unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  unfold listHeap in vp; lisp.
+  assert (listHeap (oomin v v) (ins p p1)).
+  apply insHeapSome; auto.
+  rewrite <- Heqpp1 in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+  simpl.
+  rewrite <- vvv.
+  apply preInsertHeapLess.
+  lisp.
+  eapply IHq; lisp.
+Qed.
+
+
+
+
+(*
+Lemma preDeleteMinHeap :
+  forall x v,
+    listHeap v x ->
+    listHeap v (preDeleteMin x).
 Proof.
   intros x.
   induction x; simpl; intros.
@@ -2203,6 +2792,7 @@ Proof.
   apply IHq.
   lisp.
 Qed.
+*)
 
 Lemma preExtractMinHeap :
   forall x,
@@ -3009,7 +3599,23 @@ destruct r. unfold wrapHeap.
 unfold rootHeap; simpl. exists None; split; auto.
 Focus 2. eauto.
 
-destruct m; simpl; auto.
+destruct m; simpl in *; auto. inversion Heqmm.
+remember (SBH.getMin p0 m) as p0m. destruct p0m.
+destruct p1 as [v n c].
+inversion Heqmm. subst. clear Heqmm.
+remember (SBH.split ($) nil c) as nc; destruct nc.
+edestruct SBH.preMeldHeapSome. Focus 4.
+
+destruct m1; destruct m0. unfold SBH.preMeld.
+unfold SBH.uniqify. rewrite SBH.meldUniq_equation.
+eauto. simpl. auto.
+edestruct SBH.preMeldHeapSome with (y:= (p0:::m0)) (x:=(@cil A)).
+auto. lisp. lisp.
+
+unfold SBH.preMeld. unfold SBH.uniqify. rewrite SBH.meldUniq_equation.
+apply 
+
+edestruct SBH.preMeldHeapSome.
 remember (SBH.getMin p0 m) as p0m; destruct p0m
 
 
