@@ -2483,7 +2483,6 @@ Qed.
 
 Hint Resolve OO.leqRefl.
 
-
 Lemma preDeleteMinHeap :
   forall x v,
     listHeap v x ->
@@ -2535,15 +2534,40 @@ Proof.
   rewrite <- vvv.
   unfold listHeap in vt; lisp.
   eapply insHeapSome; lisp.
+
+(* *)
+
   remember (ins p0 t) as p0t; destruct p0t; lisp.
   unfold listHeap in vp; lisp.
   rewrite <- vvv.
   eapply insHeapSome; lisp.
   remember (ins p p1) as pp1; destruct pp1; lisp.
   rewrite Heqp0t.
+
   unfold listHeap in vt; lisp.
   rewrite <- vvv.
   eapply insHeapSome; lisp.
+
+
+(* *)
+
+
+  unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H3.
+  rewrite vvv in H3.
+  unfold listHeap in H3; lisp.
+
+
+  unfold listHeap in vp; lisp.
+  assert (listHeap (oomin v v) (ins p p1)).
+  apply insHeapSome; auto.
+  rewrite <- Heqpp1 in H7.
+  rewrite vvv in H7.
+  unfold listHeap in H7; lisp.
+
+
   destruct p2; destruct p3; lisp.
   remember (nat_compare n n0) as nn0; destruct nn0; lisp.
   rewrite <- vvv.
@@ -2551,204 +2575,23 @@ Proof.
   destruct r; destruct r0; lisp.
   remember (OO.LEQ a0 a1) as a01; destruct a01; lisp.
   unfold minHeap; lisp.
-  Check insHeapSome.
-  unfold listHeap in vt; lisp.
-  assert (listHeap (oomin v v) (ins p0 t)).
-  apply insHeapSome; auto.
-  rewrite <- Heqp0t in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-  unfold listHeap in vt; lisp.
-  assert (listHeap (oomin v v) (ins p0 t)).
-  apply insHeapSome; auto.
-  rewrite <- Heqp0t in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-  unfold listHeap in vp; lisp.
-  assert (listHeap (oomin v v) (ins p p1)).
-  apply insHeapSome; auto.
-  rewrite <- Heqpp1 in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-  unfold listHeap in vp; lisp.
-  assert (listHeap (oomin v v) (ins p p1)).
-  apply insHeapSome; auto.
-  rewrite <- Heqpp1 in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-  
-  unfold listHeap in vt; lisp.
-  assert (listHeap (oomin v v) (ins p0 t)).
-  apply insHeapSome; auto.
-  rewrite <- Heqp0t in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
   unfold minHeap; lisp.
-
-  unfold listHeap in vp; lisp.
-  assert (listHeap (oomin v v) (ins p p1)).
-  apply insHeapSome; auto.
-  rewrite <- Heqpp1 in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-  unfold listHeap in vp; lisp.
-  assert (listHeap (oomin v v) (ins p p1)).
-  apply insHeapSome; auto.
-  rewrite <- Heqpp1 in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-  unfold listHeap in vt; lisp.
-  assert (listHeap (oomin v v) (ins p0 t)).
-  apply insHeapSome; auto.
-  rewrite <- Heqp0t in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-  unfold listHeap in vt; lisp.
-  assert (listHeap (oomin v v) (ins p0 t)).
-  apply insHeapSome; auto.
-  rewrite <- Heqp0t in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-
-  unfold listHeap in vp; lisp.
-  assert (listHeap (oomin v v) (ins p p1)).
-  apply insHeapSome; auto.
-  rewrite <- Heqpp1 in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
   rewrite <- vvv.
-  eapply meldUniqHeapSome.
-
-  unfold listHeap in vt; lisp.
-  assert (listHeap (oomin v v) (ins p0 t)).
-  apply insHeapSome; auto.
-  rewrite <- Heqp0t in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-
-  unfold listHeap in vp; lisp.
-  assert (listHeap (oomin v v) (ins p p1)).
-  apply insHeapSome; auto.
-  rewrite <- Heqpp1 in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
+  apply meldUniqHeapSome; lisp.
   unfold listHeap; lisp.
-
-
-  unfold listHeap in vt; lisp.
-  assert (listHeap (oomin v v) (ins p0 t)).
-  apply insHeapSome; auto.
-  rewrite <- Heqp0t in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-  destruct r.
-
-
-  unfold listHeap in vt; lisp.
-  assert (listHeap (oomin v v) (ins p0 t)).
-  apply insHeapSome; auto.
-  rewrite <- Heqp0t in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-rewrite <- vvv.
-  eapply meldUniqHeapSome.
-
-unfold listHeap in vt; lisp.
-  assert (listHeap (oomin v v) (ins p0 t)).
-  apply insHeapSome; auto.
-  rewrite <- Heqp0t in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-
-  unfold listHeap in vp; lisp.
-  assert (listHeap (oomin v v) (ins p p1)).
-  apply insHeapSome; auto.
-  rewrite <- Heqpp1 in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-  destruct r0.
-
-  unfold listHeap. lisp.
-  unfold listHeap. lisp.
-
-  unfold listHeap in vp; lisp.
-  assert (listHeap (oomin v v) (ins p p1)).
-  apply insHeapSome; auto.
-  rewrite <- Heqpp1 in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-  destruct r0.
-
-
-  unfold listHeap in vp; lisp.
-  assert (listHeap (oomin v v) (ins p p1)).
-  apply insHeapSome; auto.
-  rewrite <- Heqpp1 in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-  
   rewrite <- vvv.
-  apply meldUniqHeapSome. 
+  apply meldUniqHeapSome; lisp.
   unfold listHeap; lisp.
-
-
-unfold listHeap in vt; lisp.
-  assert (listHeap (oomin v v) (ins p0 t)).
-  apply insHeapSome; auto.
-  rewrite <- Heqp0t in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-  destruct r.
-
-
-unfold listHeap in vt; lisp.
-  assert (listHeap (oomin v v) (ins p0 t)).
-  apply insHeapSome; auto.
-  rewrite <- Heqp0t in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-  
-unfold listHeap in vt; lisp.
-  assert (listHeap (oomin v v) (ins p0 t)).
-  apply insHeapSome; auto.
-  rewrite <- Heqp0t in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
-  unfold listHeap in vp; lisp.
-  assert (listHeap (oomin v v) (ins p p1)).
-  apply insHeapSome; auto.
-  rewrite <- Heqpp1 in H3.
-  rewrite vvv in H3.
-  unfold listHeap in H3; lisp.
-
+  unfold listHeap; lisp.
+  rewrite <- vvv.
+  apply meldUniqHeapSome; lisp.
+  unfold listHeap; lisp.
   simpl.
   rewrite <- vvv.
   apply preInsertHeapLess.
   lisp.
   eapply IHq; lisp.
 Qed.
-
-
-
 
 (*
 Lemma preDeleteMinHeap :
