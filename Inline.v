@@ -511,6 +511,22 @@ Fixpoint getMin x xs :=
           else (t,x:::ts)
   end.
 
+Definition children (x:preT) :=
+  match x with 
+    | Node _ _ c => c
+  end.
+
+Fixpoint split t x c :=
+  match c with
+    | ($) => (t,x)
+    | d:::ds => 
+      match children d with
+        | ($) => split t ((root d)::x) ds
+        | _ => split (d:::t) x ds
+      end
+  end.
+
+(*
 Fixpoint split t x c :=
   match c with
     | ($) => (t,x)
@@ -520,6 +536,7 @@ Fixpoint split t x c :=
         | _ => split (d:::t) x ds
       end
   end.
+*)
 
 Definition preDeleteMin x :=
   match x with
@@ -1089,6 +1106,74 @@ Proof with auto.
           try (destruct S; eauto); eauto.
 Qed.
 
+
+Lemma splitPosRank :
+  forall v n c,
+    rankP (Node v n c) ->
+    forall r m, posBinaryRank r m ->
+      n <= m ->
+      forall h t z, (h,t) = split r z c ->
+        exists k, posSkewBinaryRank h k.
+Proof.
+  intros v n c H.
+  unfold rankP in H.
+  simpl in H.
+  dependent induction H; intros.
+  simpl in H1. inversion H1. subst.
+  eauto.
+  simpl in H3.
+  destruct y as [w j q].
+  simpl in *. assert (j = n). eauto. subst.
+  destruct q.
+  eapply IHrankN1. Focus 3.
+  eauto. eauto. auto with arith.
+  eapply IHrankN1. Focus 3.
+  eauto. eapply next. eauto.
+  Focus 2. eauto.
+  auto with arith. auto.
+  destruct x as [a b c]; destruct z as [d e f].
+  assert (b = n). eauto; subst.
+  assert (e = n). eauto; subst.
+  subst.
+  simpl in H3. destruct c; simpl in *.
+  inversion H. subst. destruct f; simpl in *.
+  inversion H3. subst. clear H3.
+  exists m. eauto.
+  inversion H3. subst. clear H3.
+  inversion H0.
+  inversion H. subst.
+  destruct f. inversion H3; subst. clear H3.
+  exists (S n0). eauto.
+  inversion_clear H3; subst.
+  exists (S n0); eauto.
+  subst.
+  destruct f; simpl in *. inversion_clear H3; subst; eauto.
+inversion_clear H3; subst; eauto.
+subst. destruct f.
+inversion_clear H3; subst. eauto.
+inversion_clear H3; subst. eauto.
+Show Existentials.
+
+  destruct y as [a b c].
+  assert (b = n). eauto.
+  subst.
+  simpl in H3.
+  destruct c. assert (n=0). inversion H0. auto.
+  subst.
+  eapply IHrankN1. Focus 3. eauto.
+  eauto. auto with arith.
+
+  destruct n. inversion H0.
+  
+  eapply IHrankN1.
+  Focus 3.
+  eapply H3.
+  eapply next. eauto.
+  Focus 2. eauto.
+  auto. auto.
+Qed.
+
+(*
 Lemma splitPosRank :
   forall v n c,
     rankP (Node v n c) ->
@@ -1139,7 +1224,59 @@ Proof.
   Focus 2. eauto.
   auto. auto.
 Qed.
+*)
 
+Lemma splitRank :
+  forall v n c,
+    rankP (Node v n c) ->
+    forall h t z, (h,t) = split ($) z c ->
+      skewBinaryRank h.
+Proof.
+  intros v n c H.
+  unfold rankP in H.
+  simpl in H.
+  dependent induction H; intros.
+  simpl in H. inversion H; subst. eauto.
+  
+  destruct y as [a b c].
+  assert (b = n); eauto; subst.
+  simpl in H1.
+  destruct c. inversion H0. subst.
+  eapply IHrankN1. eauto.
+  destruct n. inversion H0.
+  assert (exists k, posSkewBinaryRank h k).
+  eapply splitPosRank.
+  Focus 4. eauto.
+  Focus 2. eapply last. eauto.
+  eauto. auto.
+  destruct H2. eauto.
+  
+  destruct x as [a b c]; destruct z as [d e f].
+  assert (b = n); eauto; subst.
+  assert (e = n); eauto; subst.
+  simpl in H1. destruct c.
+  inversion H. subst. destruct f.
+  inversion H1; eauto.
+  inversion H1; eauto.
+  destruct n. inversion H. destruct f.
+  inversion H1; subst; eauto.
+  inversion H1; subst; eauto.
+  
+  simpl in H1.
+  destruct y as [a b c].
+  assert (b = n); eauto; subst. simpl in *.
+  destruct c. inversion H0. subst.
+  eapply IHrankN1; eauto.
+  destruct n. inversion H0.
+  assert (exists k, posSkewBinaryRank h k).
+  eapply splitPosRank.
+  Focus 4. eauto.
+  Focus 2. eapply last. eauto.
+  eauto. auto.
+  destruct H2. eauto.
+Qed.
+
+(*
 Lemma splitRank :
   forall v n c,
     rankP (Node v n c) ->
@@ -1182,6 +1319,7 @@ Proof.
   eauto. auto.
   destruct H2. eauto.
 Qed.
+*)
 
 Lemma getMinBinRank:
   forall x n,
@@ -2232,7 +2370,83 @@ Proof.
 Qed.
 *)
 
+Lemma dblMin : forall x, oomin x x = x.
+Proof.
+  unfold oomin.
+  Check LEQ. Check leqRefl.
+  intros. rewrite <- OO.leqRefl; auto.
+Qed.
+
+
 Lemma getMinQHeap :
+  forall a x b xs,
+    minHeap a x ->
+    listHeap b xs ->
+    forall y z, (y,z) = getMin x xs ->
+(*
+      true = OO.LEQ (toot y) (toot x) /\
+      listHeap (toot y) xs /\
+*)
+      listHeap (toot y) z
+      /\ listHeap (toot y) xs
+      /\ minHeap (toot y) x.
+Proof.
+  intros a x b xs;
+    generalize dependent x; generalize dependent a; generalize dependent b;
+      induction xs; simpl; intros; lisp.
+  inversion_clear H1; subst. lisp.
+  inversion_clear H1; subst. 
+  destruct x; lisp. unfold minHeap in *; lisp. destruct r; lisp.
+  remember (getMin p xs) as tts; destruct tts.
+  remember (preLEQ (root x) (root p0)) as xp; destruct xp;
+    inversion_clear H1; subst.
+  unfold listHeap in *; lisp.
+  eapply heapLess with (toot p0); auto.
+  destruct x; destruct p0; lisp.
+  destruct r; destruct r0; lisp. eapply IHxs. Focus 3. eauto.
+  eauto. eauto.
+  eapply heapLess with (toot p0); auto.
+  destruct x; destruct p0; lisp.
+  destruct r; destruct r0; lisp. eapply IHxs. Focus 3. eauto.
+  eauto. eauto.
+  unfold listHeap in *; lisp.
+  unfold minHeap in *; lisp.
+  destruct x; destruct p0; lisp.
+  destruct r; destruct r0; lisp.
+  eapply IHxs. Focus 3. eauto.
+  eauto. eauto.
+  unfold listHeap in H0; lisp.
+  remember (getMin p xs) as tts; destruct tts.
+  remember (preLEQ (root x) (root p0)) as xp; destruct xp;
+    inversion_clear H1; subst.
+  unfold listHeap; lisp.
+  eapply heapLess with (toot p0).
+  destruct x; destruct p0; lisp.
+  destruct r; destruct r0; lisp.
+  eapply IHxs; eauto.
+  eapply heapLess with (toot p0).
+  destruct x; destruct p0; lisp.
+  destruct r; destruct r0; lisp.
+  eapply IHxs; eauto.
+  assert (minHeap b p0).
+  rewrite <- (dblMin b).
+  eapply getMinTHeap; eauto.
+  destruct p0; destruct x; lisp.
+  unfold minHeap in H; unfold minHeap in H1; lisp.
+  destruct r; destruct r0; lisp.
+  pose Heqtts as hhh. eapply IHxs in hhh. lisp.
+  unfold listHeap; lisp. eauto. eauto.
+  
+  remember (getMin p xs) as tts; destruct tts.
+  remember (preLEQ (root x) (root p0)) as xp; destruct xp;
+    inversion_clear H1; subst.
+  unfold minHeap in *; destruct x; lisp. destruct r; lisp.
+  destruct p0; destruct x; unfold minHeap in H; lisp.
+  destruct r; unfold minHeap; lisp.
+  destruct r0; lisp.
+Qed.
+
+Lemma getMinQHelp :
   forall a x b xs,
     minHeap a x ->
     listHeap b xs ->
@@ -2243,27 +2457,15 @@ Lemma getMinQHeap :
 *)
       listHeap (oomin a b) z.
 Proof.
-  intros a x b xs;
-    generalize dependent x; generalize dependent a; generalize dependent b;
-      induction xs; simpl; intros; lisp.
-  inversion_clear H1; subst. lisp.
-  remember (getMin p xs) as tts; destruct tts.
-  remember (preLEQ (root x) (root p0)) as xp; destruct xp;
-    inversion_clear H1; subst.
-  destruct x; destruct p0; unfold listHeap in H0; lisp.
-  destruct r; destruct r0; unfold minHeap in H; lisp.
-  unfold listHeap; lisp.
-  apply heapLess with b; auto; try apply minLess.
-  apply heapLess with b; auto; try apply minLess.
-  
-  destruct x; destruct p0; unfold listHeap in H0; lisp.
-  destruct r; destruct r0; unfold minHeap in H; lisp.
-  unfold listHeap; lisp.
-  apply OO.leqTransTrue with a; lisp. try apply minLess.
-  eapply IHxs in Heqtts. Focus 2. eauto.
+  intros.
+  assert (listHeap (toot y) z).
+  eapply getMinQHeap with (x := x) (xs := xs); eauto.
+  eapply heapLess with (toot y).
+  eapply getMinTHeap in H1. Focus 2. eauto.
   Focus 2. eauto.
-  unfold oomin in Heqtts. rewrite <- OO.leqRefl in Heqtts.
-  apply heapLess with b; auto; try apply minLess.
+  destruct y; unfold minHeap in *; lisp.
+  destruct r; lisp.
+  auto.
 Qed.
 
 (*
@@ -2304,6 +2506,42 @@ Proof.
   induction y; simpl; lisp; intros.
   inversion_clear H0; subst; auto.
   apply heapLess with a; auto; try apply minLess.
+  destruct p as [i j k]; destruct k; simpl in *.
+  eapply IHy. Focus 3. eauto.
+  auto. unfold listHeap in H. lisp.
+  unfold listHeap in H. lisp.
+  destruct i; lisp.
+  assert (listHeap (oomin (oomin a a0) b) p0).
+  eapply IHy. Focus 2. auto.
+  Focus 2. eauto.
+  unfold listHeap; lisp.
+  apply minLess; auto.
+  apply heapLess with a; auto; apply minLess.
+  apply heapLess with (oomin (oomin a a0) b).
+  unfold oomin.
+  remember (OO.LEQ a b) as ab; destruct ab; lisp;
+    remember (OO.LEQ a a0) as aa0; destruct aa0; lisp.
+  rewrite <- Heqab; lisp.
+  remember (OO.LEQ a0 b) as a0b; destruct a0b; lisp.
+  rewrite <- Heqab; lisp.
+  remember (OO.LEQ a0 b) as a0b; destruct a0b; lisp.
+  auto.
+Qed.
+
+(*
+
+Lemma splitHeap :
+  forall a x, listHeap a x ->
+    forall b y, listHeap b y ->
+      forall p q r, (p,q) = split x r y ->
+        listHeap (oomin a b) p.
+Proof.
+  intros a x XX b y.
+  generalize dependent a;
+    generalize dependent b; generalize dependent x.
+  induction y; simpl; lisp; intros.
+  inversion_clear H0; subst; auto.
+  apply heapLess with a; auto; try apply minLess.
   destruct p as [i j k]; destruct j; simpl in *.
   eapply IHy. Focus 3. eauto.
   auto. unfold listHeap in H. lisp.
@@ -2325,6 +2563,7 @@ Proof.
   remember (OO.LEQ a0 b) as a0b; destruct a0b; lisp.
   auto.
 Qed.
+*)
 
 (*
 Lemma splitHeap :
@@ -2391,6 +2630,58 @@ Proof.
   eapply weakenEach with (rootHeap b); auto; intros.
   apply heapLess with b; auto; apply minLess.
   
+  destruct p as [i j k]; destruct k; simpl in *.
+  eapply IHz in H0.
+  Focus 2.
+  assert (Each (rootHeap (oomin b c)) (i::y)).
+  lisp. unfold listHeap in H.
+  lisp. 
+  apply heapLess with c; auto; apply minLess.
+  eapply weakenEach with (rootHeap b); auto; intros.
+  apply heapLess with b; auto; apply minLess.
+  eauto.
+  
+  Focus 3. unfold listHeap in H; lisp.
+  eauto.
+  eapply weakenEach with (rootHeap (oomin (oomin b c) c)); auto; intros.
+  apply heapLess with (oomin (oomin b c) c); auto.
+  unfold oomin.
+  remember (OO.LEQ b c) as bc; destruct bc; lisp;
+    try (rewrite <- Heqbc); lisp.
+  rewrite <- OO.leqRefl; lisp.
+  eauto.
+
+  eapply IHz in H0.
+  Focus 3.
+  assert (listHeap (oomin a c) ((Node i (S j) k):::x)).
+  lisp. unfold listHeap in H |- *.
+  lisp; destruct i; lisp.
+  apply OO.leqTransTrue with c; auto. apply minLess.
+  apply heapLess with a; auto; apply minLess.
+  unfold listHeap in *. lisp. destruct i. lisp.
+  Focus 2. apply H2. eauto. auto. auto.
+  unfold listHeap in *; lisp.
+Qed.
+
+(*
+Lemma splitEach :
+  forall a x, listHeap a x ->
+    forall b y, Each (rootHeap b) y -> 
+      forall c z, listHeap c z ->
+        forall p q, (p,q) = split x y z ->
+          Each (rootHeap (oomin b c)) q.
+Proof.
+  intros a x XX b y YY c z.
+  generalize dependent a;
+    generalize dependent b;
+      generalize dependent c;  
+        generalize dependent x;
+          generalize dependent y.
+  induction z; simpl; intros; lisp.
+  inversion_clear H0; subst; auto.
+  eapply weakenEach with (rootHeap b); auto; intros.
+  apply heapLess with b; auto; apply minLess.
+  
   destruct p as [i j k]; destruct j; simpl in *.
   eapply IHz in H0.
   Focus 2.
@@ -2424,6 +2715,7 @@ Proof.
   Focus 2. unfold listHeap in *; lisp. eauto.
   auto.
 Qed.
+*)
 
 (*
 Lemma splitEach :
@@ -2502,7 +2794,7 @@ Proof.
   unfold oomin; rewrite <- OO.leqRefl; lisp.
   assert (listHeap v t) as vt.
   rewrite <- vvv. 
-  eapply getMinQHeap. Focus 3. eauto.
+  eapply getMinQHelp. Focus 3. eauto.
   auto. auto.
   assert (listHeap v c) as vc.
   eapply getMinTHeap in Heqpt.
@@ -2637,6 +2929,220 @@ Proof.
 Qed.
 *)
 
+Check root.
+Check preExtractMin.
+Print Root.
+Check root.
+Check Top.root.
+
+Lemma preExtractMinHeap :
+  forall v x,
+    listHeap v x ->
+    forall y z,
+      Some (y,z) = preExtractMin x ->
+      listHeap (Top.root y) x /\ listHeap (Top.root y) z.
+Proof.
+  intros.
+  unfold preExtractMin in *.
+  destruct x.
+  inversion H0.
+  remember (getMin p x) as gt; destruct gt.
+  destruct p0.
+  inversion H0. subst. clear H0.
+  Show Existentials.
+
+  remember (split ($) [] m0) as dm; destruct dm.
+  unfold listHeap in H; lisp.
+  replace (Top.root r) with (toot (Node r n m0)).
+  unfold listHeap; split.
+  eapply getMinQHeap.  Focus 3. eauto. eauto. eauto.
+  eapply getMinQHeap.  Focus 3. eauto. eauto. eauto.
+  auto.
+  assert (minHeap v (Node r n m0)).
+  rewrite <- (dblMin v).
+  Show Existentials.
+
+  eapply getMinTHeap; eauto. Show Existentials.
+  assert (Each (rootHeap (Top.root r)) l).
+  rewrite <- (dblMin (Top.root r)).
+  Check splitEach. destruct r.
+  eapply splitEach with (a:=a). Focus 4. eauto.
+  unfold listHeap. simpl. Show Existentials.
+  lisp. Show Existentials.
+  eauto. Show Existentials. eauto.
+  unfold minHeap in H1; lisp.  lisp.
+  assert (listHeap (toot (Node r n m0)) m).
+
+  Show Existentials.
+  Check getMinQHeap.
+  eapply getMinQHeap with (xs:=x). Focus 3. eauto. eauto. eauto.
+  assert (listHeap (toot (Node r n m0)) m0).
+  lisp. unfold minHeap in *; lisp. destruct r; lisp.
+  assert (listHeap (toot (Node r n m0)) m1).
+  rewrite <- (dblMin (toot (Node r n m0))).
+  eapply splitHeap. Focus 3. eauto.
+  auto. auto.
+  assert (listHeap (toot (Node r n m0)) (preMeld m m1)).
+  rewrite <- (dblMin (toot (Node r n m0))).
+  eapply preMeldHeapSome. auto. auto.
+  clear Heqdm.
+  induction l. auto. simpl.
+  rewrite <- (dblMin (Top.root r)).
+  apply preInsertHeapLess. lisp.
+  apply IHl. lisp. Show Existentials.
+Qed.
+
+
+Lemma preExtractMinRootHeap :
+  forall x v,
+    listHeap v x ->
+    forall y z,
+      Some (y,z) = preExtractMin x ->
+      rootHeap v y.
+Proof.
+  intros x.
+  destruct x; simpl; intros.
+  inversion H0.
+  rename p into a.
+  remember (getMin a x) as pt; destruct pt as [p t].
+  destruct p as [zz zzz c].
+  inversion_clear H0; subst.
+  assert (oomin v v = v) as vvv.
+  unfold oomin; rewrite <- OO.leqRefl; lisp.
+  unfold listHeap in H; lisp.
+  assert (minHeap v (Node zz zzz c)).
+  rewrite <- vvv.
+  eapply getMinTHeap. Focus 3. eauto. lisp. lisp.
+  unfold minHeap in *. lisp.
+Qed.
+
+
+Lemma preExtractMinHelp :
+  forall v x,
+    listHeap v x ->
+    forall y z,
+      Some (y,z) = preExtractMin x ->
+      listHeap v z.
+Proof.
+  intros.
+  eapply heapLess with (Top.root y).
+  assert (rootHeap v y). eapply preExtractMinRootHeap; eauto.
+  destruct y; unfold rootHeap in *; lisp.
+  eapply preExtractMinHeap; eauto.
+Qed.
+
+(*
+  intros v x; generalize dependent v.
+  induction x; simpl; intros.
+  inversion H0.
+  eauto. lisp.
+  rename p into a.
+  remember (getMin a x) as pt; destruct pt as [p t].
+  destruct p as [zz zzz c].
+  remember (split ($) [] c) as pq; destruct pq as [p q].
+
+  unfold listHeap in H.
+  lisp.
+  assert (oomin v v = v) as vvv.
+  unfold oomin; rewrite <- OO.leqRefl; lisp.
+  assert (listHeap v t) as vt.
+  rewrite <- vvv. 
+  eapply getMinQHeap. Focus 3. eauto.
+  auto. auto.
+  assert (listHeap v c) as vc.
+  eapply getMinTHeap in Heqpt.
+  Focus 2. eauto. Focus 2. eauto.
+  rewrite vvv in Heqpt. unfold minHeap in Heqpt.
+  lisp.
+  destruct zz; lisp.
+  apply heapLess with a0; lisp.
+  assert (listHeap v p) as vp.
+  eapply splitHeap with (a:=v) (b:=v) in Heqpq. rewrite vvv in Heqpq. auto.
+  lisp. lisp.
+  assert (Each (rootHeap v) q) as vq.
+  eapply splitEach with (a:=v) (b:=v) (c:= v) in Heqpq. 
+  rewrite vvv in Heqpq. auto. lisp. lisp. lisp.
+  clear Heqpq Heqpt.
+  generalize dependent t.
+  generalize dependent c.
+  generalize dependent p.
+  generalize dependent z.
+  generalize dependent y.
+  induction q; intros.
+  lisp. inversion H0. unfold preMeld.
+  unfold uniqify.
+  destruct t; destruct p; lisp;
+    rewrite meldUniq_equation; lisp.
+  rewrite <- vvv.
+  unfold listHeap in vp; lisp.
+  eapply insHeapSome; lisp.
+  remember (ins p0 t) as p0t; destruct p0t; lisp.
+  rewrite Heqp0t.
+  rewrite <- vvv.
+  unfold listHeap in vt; lisp.
+  eapply insHeapSome; lisp.
+
+(* *)
+
+  remember (ins p0 t) as p0t; destruct p0t; lisp.
+  unfold listHeap in vp; lisp.
+  rewrite <- vvv.
+  eapply insHeapSome; lisp.
+  remember (ins p p1) as pp1; destruct pp1; lisp.
+  rewrite Heqp0t.
+
+  unfold listHeap in vt; lisp.
+  rewrite <- vvv.
+  eapply insHeapSome; lisp.
+
+
+(* *)
+
+
+  unfold listHeap in vt; lisp.
+  assert (listHeap (oomin v v) (ins p0 t)).
+  apply insHeapSome; auto.
+  rewrite <- Heqp0t in H6.
+  rewrite vvv in H6.
+  unfold listHeap in H6; lisp.
+
+
+  unfold listHeap in vp; lisp.
+  assert (listHeap (oomin v v) (ins p p1)).
+  apply insHeapSome; auto.
+  rewrite <- Heqpp1 in H10.
+  rewrite vvv in H10.
+  unfold listHeap in H10; lisp.
+
+
+  destruct p2; destruct p3; lisp.
+  remember (nat_compare n n0) as nn0; destruct nn0; lisp.
+  rewrite <- vvv.
+  apply insHeapSome.
+  destruct r; destruct r0; lisp.
+  remember (OO.LEQ a0 a1) as a01; destruct a01; lisp.
+  unfold minHeap; lisp.
+  unfold minHeap; lisp.
+  rewrite <- vvv.
+  apply meldUniqHeapSome; lisp.
+  unfold listHeap; lisp.
+  rewrite <- vvv.
+  apply meldUniqHeapSome; lisp.
+  unfold listHeap; lisp.
+  unfold listHeap; lisp.
+  rewrite <- vvv.
+  apply meldUniqHeapSome; lisp.
+  unfold listHeap; lisp.
+  simpl in *.
+  rewrite <- vvv.
+  inversion H0.
+  apply preInsertHeapLess.
+  lisp.
+  apply IHq with (y := zz) (t := t) (p := p) (c:= c); lisp.
+Qed.
+*)
+
+(*
 Lemma preExtractMinHeap :
   forall x,
     listHeap x ->
@@ -2674,7 +3180,34 @@ Proof.
   apply preInsertHeap; auto.  lisp; eauto. Show Existentials.
   lisp.
 Qed.
+*)
 
+(*
+Lemma preExtractMinRootHeap :
+  forall x v,
+    listHeap v x ->
+    forall y z,
+      Some (y,z) = preExtractMin x ->
+      rootHeap v y.
+Proof.
+  intros x.
+  destruct x; simpl; intros.
+  inversion H0.
+  rename p into a.
+  remember (getMin a x) as pt; destruct pt as [p t].
+  destruct p as [zz zzz c].
+  inversion_clear H0; subst.
+  assert (oomin v v = v) as vvv.
+  unfold oomin; rewrite <- OO.leqRefl; lisp.
+  unfold listHeap in H; lisp.
+  assert (minHeap v (Node zz zzz c)).
+  rewrite <- vvv.
+  eapply getMinTHeap. Focus 3. eauto. lisp. lisp.
+  unfold minHeap in *. lisp.
+Qed.
+*)
+
+(*
 Lemma preExtractMinRootHeap :
   forall x,
     listHeap x ->
@@ -2695,7 +3228,48 @@ Proof.
   eauto. eauto.
   lisp; eauto.
 Qed.
+*)
 
+Definition findMinHelpHeap :
+  forall xs v, listHeap v xs ->
+    forall x w, minHeap w x ->
+      rootHeap (oomin v w) (preFindMinHelp x xs).
+Proof.
+  induction xs; simpl; intros; lisp.
+  destruct x; lisp. 
+  unfold minHeap in *; unfold rootHeap.
+  lisp. apply heapLess with w; lisp. apply minLess.
+  remember (preLEQ (root x) (preFindMinHelp p xs)) as xpxs;
+    destruct xpxs; lisp.
+  destruct x; lisp. 
+  unfold minHeap in *; lisp.
+  apply heapLess with w; lisp. apply minLess.
+  unfold listHeap in H; lisp.
+  assert (rootHeap (oomin v v) (preFindMinHelp p xs)) as ans.
+  apply IHxs; lisp.
+  assert (oomin v v = v) as vvv.
+  unfold oomin; rewrite <- OO.leqRefl; lisp.
+  rewrite vvv in ans.
+  apply heapLess with v; lisp. apply minLess.
+Qed.
+
+Definition findMinHeap :
+  forall x v,
+    listHeap v x ->
+    forall y, Some y = preFindMin x ->
+      rootHeap v y.
+Proof.
+  induction x; simpl; intros.
+  inversion H0.
+  inversion_clear H0; subst.
+  unfold listHeap in H; lisp.
+  assert (oomin v v = v) as vvv.
+  unfold oomin; rewrite <- OO.leqRefl; lisp.
+  rewrite <- vvv.
+  apply findMinHelpHeap; lisp; eauto.
+Qed.
+
+(*
 Definition findMinHelpHeap :
   forall xs, listHeap xs ->
     forall x, minHeap x ->
@@ -2720,8 +3294,9 @@ Proof.
   inversion_clear H0; subst.
   apply findMinHelpHeap; lisp; eauto.
 Qed.
+*)
 
-Definition PQP x := skewBinaryRank x /\ listHeap x.
+Definition PQP x := skewBinaryRank x /\ (x = ($) \/ exists v, listHeap v x).
 
 Definition PQ := { x:preQ | PQP x}.
 
@@ -2733,10 +3308,15 @@ Qed.
 Program Definition insert : A -> PQ -> PQ := preInsert.
 Next Obligation.
   destruct x0. destruct x.
-  destruct p.
+  destruct p. 
   split; simpl.
-  apply preInsertRank. assumption.
-  simpl. apply preInsertHeap. eauto. auto.
+  apply preInsertRank. assumption. destruct o.
+  subst. right. destruct x. exists a; lisp.
+  unfold listHeap; lisp. right.
+  simpl. 
+  destruct x; lisp. destruct H.
+  exists (oomin a x).
+  apply preInsertHeapLess; lisp.
 Qed.
 
 Definition findMin (x:PQ) : option A.
@@ -2748,9 +3328,13 @@ refine (fun x =>
         | Some y => fun s => Some (@exist _ _ y _)
       end eq_refl
   end).
-  edestruct findMinHeap. Focus 2. eauto.
-  destruct xp; eauto.
-  destruct y; lisp; eauto.
+  destruct xp.
+  Check findMinHeap.
+  destruct H0; subst; lisp. inversion s.
+  destruct H0.
+  eapply findMinHeap in s.
+  destruct y.
+  unfold rootHeap in s; lisp. eauto.
 Defined.
 
 Lemma findMin_equality :
@@ -2764,38 +3348,55 @@ Proof.
   unfold findMin.
   Check preFindMin.
 (*  generalize dependent Heqpemx.*)
+  Locate "_ \/ _". Print or.
   assert (forall (zz:option (Root OO.A)) (pp:zz= preFindMin x),
-Some (exist (fun x0 : Root OO.A => feapR OO.LEQ None x0) y py) =
+   Some (exist (fun x0 : Root OO.A => feapR OO.LEQ (Top.root x0) x0) y py) =
    match zz as j return (j = preFindMin x -> option A) with
    | Some y0 =>
        fun s : Some y0 = preFindMin x =>
        Some
-         (exist (fun x0 : Root OO.A => feapR OO.LEQ None x0) y0
-            match findMinHeap match px with
-                              | conj _ H0 => H0
-                              end s with
-            | ex_intro x0 H =>
+         (exist (fun x0 : Root OO.A => feapR OO.LEQ (Top.root x0) x0) y0
+            match px with
+            | conj H (or_introl H1) =>
+                eq_ind_r
+                  (fun x' : preQ =>
+                   skewBinaryRank x' ->
+                   Some y0 = preFindMin x' -> feapR OO.LEQ (Top.root y0) y0)
+                  (fun (_ : skewBinaryRank ($))
+                     (s0 : Some y0 = preFindMin ($)) =>
+                   match
+                     s0 in (_ = y1)
+                     return (y1 = None -> feapR OO.LEQ (Top.root y0) y0)
+                   with
+                   | eq_refl =>
+                       fun H3 : Some y0 = None =>
+                       False_ind (feapR OO.LEQ (Top.root y0) y0)
+                         (eq_ind (Some y0)
+                            (fun e : option (Root OO.A) =>
+                             match e with
+                             | Some _ => True
+                             | None => False
+                             end) I None H3)
+                   end eq_refl) H1 H s
+            | conj H (or_intror (ex_intro x0 H2)) =>
                 match
                   y0 as r
-                  return
-                    (Some r = preFindMin x ->
-                     feapR OO.LEQ x0 r -> feapR OO.LEQ None r)
+                  return (rootHeap x0 r -> feapR OO.LEQ (Top.root r) r)
                 with
                 | Top a m =>
-                    fun (_ : Some (Top a m) = preFindMin x)
-                      (H0 : feapR OO.LEQ x0 (Top a m)) =>
-                    match H0 with
-                    | conj _ H2 => conj I H2
+                    fun s0 : rootHeap x0 (Top a m) =>
+                    match s0 with
+                    | conj _ H4 => conj (OO.leqRefl a) H4
                     end
-                end s H
+                end (findMinHeap x x0 H2 s)
             end)
    | None => fun _ : None = preFindMin x => None
-   end pp -> Some y = pemx) as P.
+   end pp -> Some y = pemx).
   intros.
   destruct zz.
   inversion_clear H; subst. auto.
   inversion H.
-  pose (P (preFindMin x) eq_refl) as Q.
+  pose (H (preFindMin x) eq_refl) as Q.
   apply Q.
 Qed.
 
@@ -2809,32 +3410,49 @@ Proof.
   remember (preFindMin x) as pemx.
   unfold findMin.  
   assert (forall (zz:option (Root OO.A)) (pp:zz= preFindMin x),
-    None =
+   None =
    match zz as j return (j = preFindMin x -> option A) with
-   | Some y0 =>
-       fun s : Some y0 = preFindMin x =>
+   | Some y =>
+       fun s : Some y = preFindMin x =>
        Some
-         (exist (fun x0 : Root OO.A => feapR OO.LEQ None x0) y0
-            match findMinHeap match px with
-                              | conj _ H0 => H0
-                              end s with
-            | ex_intro x0 H =>
+         (exist (fun x0 : Root OO.A => feapR OO.LEQ (Top.root x0) x0) y
+            match px with
+            | conj H (or_introl H1) =>
+                eq_ind_r
+                  (fun x' : preQ =>
+                   skewBinaryRank x' ->
+                   Some y = preFindMin x' -> feapR OO.LEQ (Top.root y) y)
+                  (fun (_ : skewBinaryRank ($))
+                     (s0 : Some y = preFindMin ($)) =>
+                   match
+                     s0 in (_ = y0)
+                     return (y0 = None -> feapR OO.LEQ (Top.root y) y)
+                   with
+                   | eq_refl =>
+                       fun H3 : Some y = None =>
+                       False_ind (feapR OO.LEQ (Top.root y) y)
+                         (eq_ind (Some y)
+                            (fun e : option (Root OO.A) =>
+                             match e with
+                             | Some _ => True
+                             | None => False
+                             end) I None H3)
+                   end eq_refl) H1 H s
+            | conj H (or_intror (ex_intro x0 H2)) =>
                 match
-                  y0 as r
-                  return
-                    (Some r = preFindMin x ->
-                     feapR OO.LEQ x0 r -> feapR OO.LEQ None r)
+                  y as r
+                  return (rootHeap x0 r -> feapR OO.LEQ (Top.root r) r)
                 with
                 | Top a m =>
-                    fun (_ : Some (Top a m) = preFindMin x)
-                      (H0 : feapR OO.LEQ x0 (Top a m)) =>
-                    match H0 with
-                    | conj _ H2 => conj I H2
+                    fun s0 : rootHeap x0 (Top a m) =>
+                    match s0 with
+                    | conj _ H4 => conj (OO.leqRefl a) H4
                     end
-                end s H
+                end (findMinHeap x x0 H2 s)
             end)
    | None => fun _ : None = preFindMin x => None
-   end pp -> None = pemx) as P. Focus 2.
+   end pp -> None = pemx) as P.
+   Focus 2.
   eapply P.
   intros.
   destruct zz.
@@ -2847,13 +3465,44 @@ Next Obligation.
   destruct x; destruct x0.
   destruct p; destruct p0; split; simpl.
   apply preMeldRank; auto.
-  apply preMeldHeap; auto.
+  destruct o; destruct o0; subst.
+  left; unfold preMeld. unfold uniqify.
+  rewrite meldUniq_equation. auto.
+  destruct H0; right. unfold preMeld.
+  unfold uniqify at 1.
+  rewrite meldUniq_equation. exists x.
+  induction x0. lisp.
+  simpl. unfold listHeap in H. lisp.
+  assert (forall v, oomin v v = v) as vvv.
+  unfold oomin. intros.
+  remember (OO.LEQ v v) as vv; destruct vv; auto.
+  rewrite <- (vvv x).
+  apply insHeapSome; lisp.
+  right.
+  unfold preMeld. unfold uniqify at 2; lisp.
+  rewrite meldUniq_equation.
+  remember (uniqify x) as ux; destruct ux; lisp.
+  destruct H; lisp. exists x0; lisp.
+  rewrite Hequx.
+  destruct H. clear Hequx. unfold uniqify. destruct x.
+  exists x0; lisp. unfold listHeap in H; lisp.
+  exists x0.
+  assert (forall v, oomin v v = v) as vvv.
+  unfold oomin. intros.
+  remember (OO.LEQ v v) as vv; destruct vv; auto.
+  rewrite <- (vvv x0).
+  apply insHeapSome; lisp.
+  destruct H; destruct H0. right.
+  exists (oomin x1 x2).
+  apply preMeldHeapSome; lisp.
 Qed.
 
 Program Definition deleteMin : PQ -> PQ := preDeleteMin.
 Next Obligation.
   destruct x. destruct p; split; simpl.
   apply deleteMinRank; auto.
+  destruct o; subst. left; lisp. right.
+  destruct H. exists x0.
   apply preDeleteMinHeap; auto.
 Qed.
 
@@ -2887,6 +3536,32 @@ refine (fun x =>
         | Some (y,z) => fun s => Some ((@exist _ _ y _),(@exist _ _ z _))
       end eq_refl
   end).
+  Check preExtractMinRootHeap.
+  destruct xp. destruct H0; subst. unfold preExtractMin in s. inversion s.
+  destruct H0.
+  assert (rootHeap x0 y) as ANS.
+  eapply preExtractMinRootHeap. Focus 2. eauto. auto.
+  unfold rootHeap in *; destruct y; lisp.
+  unfold PQP. lisp.
+  destruct xp.
+  eapply extractMinRank; eauto.
+  destruct xp. destruct H0; subst; lisp. inversion s.
+  destruct H0. right.
+  exists x0. eapply preExtractMinHelp. Focus 2. eauto. auto.
+Defined. 
+
+(*
+Definition extractMin (x:PQ) : option (A*PQ).
+refine (fun x =>
+  match x with
+    | exist x' xp =>
+      match preExtractMin x' as j return ((j=preExtractMin x') -> option (A*PQ)) with
+        | None => fun _ => None
+        | Some (y,z) => fun s => Some ((@exist _ _ y _),(@exist _ _ z _))
+      end eq_refl
+  end).
+
+
   edestruct preExtractMinRootHeap.
   Focus 2. eauto.
   destruct xp as [R M]. auto.
@@ -2896,6 +3571,7 @@ refine (fun x =>
   eapply extractMinRank; eauto.
   eapply preExtractMinHeap; eauto.
 Defined.
+*)
 
 Lemma extractMin_equality :
   forall x px y py z pz,
@@ -2906,10 +3582,11 @@ Proof.
   generalize dependent H. 
   remember (preExtractMin x) as pemx.
   unfold extractMin.  
+
 (*  generalize dependent Heqpemx.*)
   assert (forall (zz:option((Root OO.A)*preQ)) (pp:zz= preExtractMin x),
    Some
-     (exist (fun x0 : Root OO.A => feapR OO.LEQ None x0) y py,
+     (exist (fun x0 : Root OO.A => feapR OO.LEQ (Top.root x0) x0) y py,
      exist (fun x0 : preQ => PQP x0) z pz) =
    match
      zz as j return (j = preExtractMin x -> option (A * PQ))
@@ -2919,31 +3596,80 @@ Proof.
            return (Some p0 = preExtractMin x -> option (A * PQ)) := p in
        fun s : Some (y0, z0) = preExtractMin x =>
        Some
-         (exist (fun x0 : Root OO.A => feapR OO.LEQ None x0) y0
-            match
-              preExtractMinRootHeap match px with
-                                    | conj _ M => M
-                                    end s
-            with
-            | ex_intro x0 H =>
+         (exist (fun x0 : Root OO.A => feapR OO.LEQ (Top.root x0) x0) y0
+            match px with
+            | conj H (or_introl H1) =>
+                eq_ind_r
+                  (fun x' : preQ =>
+                   skewBinaryRank x' ->
+                   Some (y0, z0) = preExtractMin x' ->
+                   feapR OO.LEQ (Top.root y0) y0)
+                  (fun (_ : skewBinaryRank ($))
+                     (s0 : Some (y0, z0) = preExtractMin ($)) =>
+                   match
+                     s0 in (_ = y1)
+                     return (y1 = None -> feapR OO.LEQ (Top.root y0) y0)
+                   with
+                   | eq_refl =>
+                       fun H3 : Some (y0, z0) = None =>
+                       False_ind (feapR OO.LEQ (Top.root y0) y0)
+                         (eq_ind (Some (y0, z0))
+                            (fun e : option (Root OO.A * ml OO.A) =>
+                             match e with
+                             | Some _ => True
+                             | None => False
+                             end) I None H3)
+                   end eq_refl) H1 H s
+            | conj H (or_intror (ex_intro x0 H2)) =>
                 match
                   y0 as r
                   return
                     (Some (r, z0) = preExtractMin x ->
-                     feapR OO.LEQ x0 r -> feapR OO.LEQ None r)
+                     feapR OO.LEQ x0 r -> feapR OO.LEQ (Top.root r) r)
                 with
                 | Top a m =>
                     fun (_ : Some (Top a m, z0) = preExtractMin x)
-                      (H0 : feapR OO.LEQ x0 (Top a m)) =>
-                    match H0 with
-                    | conj _ H2 => conj I H2
+                      (ANS : feapR OO.LEQ x0 (Top a m)) =>
+                    match ANS with
+                    | conj _ H4 => conj (OO.leqRefl a) H4
                     end
-                end s H
+                end s (preExtractMinRootHeap x x0 H2 s)
             end,
          exist (fun x0 : preQ => PQP x0) z0
-           match px with
-           | conj R M => conj (extractMinRank R s) (preExtractMinHeap M s)
-           end)
+           (conj match px with
+                 | conj H _ => extractMinRank H s
+                 end
+              match px with
+              | conj H (or_introl H1) =>
+                  eq_ind_r
+                    (fun x' : preQ =>
+                     skewBinaryRank x' ->
+                     Some (y0, z0) = preExtractMin x' ->
+                     z0 = $ \/ (exists v : OO.A, listHeap v z0))
+                    (fun (_ : skewBinaryRank ($))
+                       (s0 : Some (y0, z0) = preExtractMin ($)) =>
+                     match
+                       s0 in (_ = y1)
+                       return
+                         (y1 = None ->
+                          z0 = $ \/ (exists v : OO.A, listHeap v z0))
+                     with
+                     | eq_refl =>
+                         fun H3 : Some (y0, z0) = None =>
+                         False_ind
+                           (z0 = $ \/ (exists v : OO.A, listHeap v z0))
+                           (eq_ind (Some (y0, z0))
+                              (fun e : option (Root OO.A * ml OO.A) =>
+                               match e with
+                               | Some _ => True
+                               | None => False
+                               end) I None H3)
+                     end eq_refl) H1 H s
+              | conj H (or_intror (ex_intro x0 H2)) =>
+                  or_intror (z0 = $)
+                    (ex_intro (fun v : OO.A => listHeap v z0) x0
+                       (preExtractMinHelp x0 x H2 s))
+              end))
    | None => fun _ : None = preExtractMin x => None
    end pp -> Some (y, z) = pemx) as P.
   intros.
@@ -2964,44 +3690,93 @@ Proof.
   generalize dependent H. 
   remember (preExtractMin x) as pemx.
   unfold extractMin.  
-(*  generalize dependent Heqpemx.*)
+
   assert (forall (zz:option((Root OO.A)*preQ)) (pp:zz= preExtractMin x),
-    None =
+   None =
    match
      zz as j return (j = preExtractMin x -> option (A * PQ))
    with
    | Some p =>
-       let (y0, z0) as p0
+       let (y, z) as p0
            return (Some p0 = preExtractMin x -> option (A * PQ)) := p in
-       fun s : Some (y0, z0) = preExtractMin x =>
+       fun s : Some (y, z) = preExtractMin x =>
        Some
-         (exist (fun x0 : Root OO.A => feapR OO.LEQ None x0) y0
-            match
-              preExtractMinRootHeap match px with
-                                    | conj _ M => M
-                                    end s
-            with
-            | ex_intro x0 H =>
+         (exist (fun x0 : Root OO.A => feapR OO.LEQ (Top.root x0) x0) y
+            match px with
+            | conj H (or_introl H1) =>
+                eq_ind_r
+                  (fun x' : preQ =>
+                   skewBinaryRank x' ->
+                   Some (y, z) = preExtractMin x' ->
+                   feapR OO.LEQ (Top.root y) y)
+                  (fun (_ : skewBinaryRank ($))
+                     (s0 : Some (y, z) = preExtractMin ($)) =>
+                   match
+                     s0 in (_ = y0)
+                     return (y0 = None -> feapR OO.LEQ (Top.root y) y)
+                   with
+                   | eq_refl =>
+                       fun H3 : Some (y, z) = None =>
+                       False_ind (feapR OO.LEQ (Top.root y) y)
+                         (eq_ind (Some (y, z))
+                            (fun e : option (Root OO.A * ml OO.A) =>
+                             match e with
+                             | Some _ => True
+                             | None => False
+                             end) I None H3)
+                   end eq_refl) H1 H s
+            | conj H (or_intror (ex_intro x0 H2)) =>
                 match
-                  y0 as r
+                  y as r
                   return
-                    (Some (r, z0) = preExtractMin x ->
-                     feapR OO.LEQ x0 r -> feapR OO.LEQ None r)
+                    (Some (r, z) = preExtractMin x ->
+                     feapR OO.LEQ x0 r -> feapR OO.LEQ (Top.root r) r)
                 with
                 | Top a m =>
-                    fun (_ : Some (Top a m, z0) = preExtractMin x)
-                      (H0 : feapR OO.LEQ x0 (Top a m)) =>
-                    match H0 with
-                    | conj _ H2 => conj I H2
+                    fun (_ : Some (Top a m, z) = preExtractMin x)
+                      (ANS : feapR OO.LEQ x0 (Top a m)) =>
+                    match ANS with
+                    | conj _ H4 => conj (OO.leqRefl a) H4
                     end
-                end s H
+                end s (preExtractMinRootHeap x x0 H2 s)
             end,
-         exist (fun x0 : preQ => PQP x0) z0
-           match px with
-           | conj R M => conj (extractMinRank R s) (preExtractMinHeap M s)
-           end)
+         exist (fun x0 : preQ => PQP x0) z
+           (conj match px with
+                 | conj H _ => extractMinRank H s
+                 end
+              match px with
+              | conj H (or_introl H1) =>
+                  eq_ind_r
+                    (fun x' : preQ =>
+                     skewBinaryRank x' ->
+                     Some (y, z) = preExtractMin x' ->
+                     z = $ \/ (exists v : OO.A, listHeap v z))
+                    (fun (_ : skewBinaryRank ($))
+                       (s0 : Some (y, z) = preExtractMin ($)) =>
+                     match
+                       s0 in (_ = y0)
+                       return
+                         (y0 = None ->
+                          z = $ \/ (exists v : OO.A, listHeap v z))
+                     with
+                     | eq_refl =>
+                         fun H3 : Some (y, z) = None =>
+                         False_ind (z = $ \/ (exists v : OO.A, listHeap v z))
+                           (eq_ind (Some (y, z))
+                              (fun e : option (Root OO.A * ml OO.A) =>
+                               match e with
+                               | Some _ => True
+                               | None => False
+                               end) I None H3)
+                     end eq_refl) H1 H s
+              | conj H (or_intror (ex_intro x0 H2)) =>
+                  or_intror (z = $)
+                    (ex_intro (fun v : OO.A => listHeap v z) x0
+                       (preExtractMinHelp x0 x H2 s))
+              end))
    | None => fun _ : None = preExtractMin x => None
    end pp -> None = pemx) as P.
+
   Focus 2.
   eapply P.
   intros.
@@ -3201,37 +3976,74 @@ Ltac lisp := simpl in *;
   match goal with
     | [ H : _ /\ _ |- _ ] => destruct H; lisp
     | [ |- _ /\ _ ] => split; lisp
+    | [ H : minHeap _ |- _ ] => unfold minHeap in H; lisp
+    | [ H : rootHeap _ |- _ ] => unfold rootHeap in H; lisp
+    | [ H : listHeap _ |- _ ] => unfold listHeap in H; lisp
+    | [ _ : false = OO.LEQ ?a ?b |- true = OO.LEQ ?b ?a] 
+      => apply OO.leqSymm; auto; lisp
+    |  [_ : true = OO.LEQ ?a ?b , 
+        _ : true = OO.LEQ ?b ?c 
+        |- true = OO.LEQ ?a ?c] => eapply OO.leqTransTrue; eauto; lisp
+    |  [_ : true = OO.LEQ ?a ?b , 
+        _ : false = OO.LEQ ?a ?c 
+        |- true = OO.LEQ ?c ?b] => 
+    assert (true = OO.LEQ c a); lisp
+    |  [_ : true = OO.LEQ ?a ?b , 
+        _ : false = OO.LEQ ?c ?b 
+        |- true = OO.LEQ ?a ?c] => 
+    assert (true = OO.LEQ b c); lisp
+    |  [_ : false = OO.LEQ ?a ?b , 
+        _ : false = OO.LEQ ?b ?c 
+        |- true = OO.LEQ ?c ?a] => 
+    assert (false = OO.LEQ a c); lisp
+    |  [_ : false = OO.LEQ ?a ?b , 
+        _ : false = OO.LEQ ?b ?c 
+        |- false = OO.LEQ ?a ?c] => 
+    eapply OO.leqTransFalse; eauto; lisp
+    | [ |- true = OO.LEQ ?a ?a] => apply OO.leqRefl; auto; lisp
+    | [ |- match ?a with | Top _ _ => True end] => destruct a; auto; lisp
+    | _ => auto
+  end.
+
+(*
+Ltac lisp := simpl in *;
+  match goal with
+    | [ H : _ /\ _ |- _ ] => destruct H; lisp
+    | [ |- _ /\ _ ] => split; lisp
     | [ H : minHeap _ |- _ ] => destruct H; lisp
     | [ H : rootHeap _ |- _ ] => destruct H; lisp
     | [ H : listHeap _ |- _ ] => destruct H; lisp
     | _ => auto
   end.
+*)
+
+Lemma dblMin : forall x, SBH.oomin x x = x.
+Proof.
+  unfold SBH.oomin.
+  Check LEQ. Check leqRefl.
+  intros. rewrite <- leqRefl; auto.
+Qed.
 
 Program Definition insert : A -> PQ -> PQ := preInsert.
 Next Obligation.
   destruct x0; lisp.
   destruct x0; lisp.
-  exists None; lisp.
+  exists x; lisp.
   unfold preInsert; simpl.
   destruct b; lisp.
+  destruct w. lisp. clear x0 H.
   remember (LEQ x a) as xa; destruct xa; lisp.
-  Focus 2.
-  exists (Some a). lisp.
-  eapply SBH.preInsertHeapLess.
-  Focus 2. eauto.
-  Focus 3.
-  assert (a = if LEQ x a then x else a); auto.
-  remember (LEQ x a) as xa; destruct xa.
-  inversion Heqxa. auto. eauto.
-  Focus 2. lisp.
-  unfold rootHeap. simpl.
-  exists None. lisp.
+  exists x; lisp.
+  exists (SBH.oomin a a); lisp.
+  rewrite dblMin; lisp.
+  rewrite <- (dblMin a).
+  eapply SBH.preInsertHeapLess; lisp.
 Qed.
 
 Lemma insertCountM : 
   forall f x,
   forall p q, 
-    countM f x ((SBH.preInsert p) q)
+    countM f x (SBH.preInsert p q)
     = countR f x p
     + countM f x q.
 Proof.
@@ -3290,15 +4102,15 @@ Print all_ind.
 
 Lemma findMinAll :
   (forall x f (d:DERP LEQ f) y a,
-    feapT OO.LEQ (Some a) x ->
+    feapT OO.LEQ a x ->
     (if f y a then S (countT f y x) else countT f y x) > 0 ->
     LEQ a y = true)
   /\ (forall x f (d:DERP LEQ f) y a,
-    feapR OO.LEQ (Some a) x ->
+    feapR OO.LEQ a x ->
     (if f y a then S (countR f y x) else countR f y x) > 0 ->
     LEQ a y = true)
   /\ (forall x f (d:DERP LEQ f) y a,
-    feapM OO.LEQ (Some a) x ->
+    feapM OO.LEQ a x ->
     (if f y a then S (countM f y x) else countM f y x) > 0 ->
     LEQ a y = true).
 Proof.
@@ -3350,25 +4162,19 @@ Lemma findMinCount :
     end.
 Proof.
   intros; destruct inp; simpl; auto.
-  unfold findMin. simpl.
+  unfold findMin. simpl. lisp.
   destruct x; simpl.
   intros; unfold count; simpl; auto.
   destruct b.
   intros.
   simpl in w. destruct w.
-  simpl in f.
+  simpl in f. lisp.
   destruct same; simpl.
   unfold count; simpl.
   remember (x0 y a) as ya; destruct ya.
   omega.
   intros.
-  destruct x; simpl in *.
-  destruct f.
-  eapply findMinAll; eauto.
-  rewrite <- Heqya; auto.
-  eapply findMinAll; eauto.
-  destruct f; eauto.
-  rewrite <- Heqya; auto.
+  eapply findMinAll. eauto. eauto. rewrite <- Heqya. auto.
 Qed.
 
 Program Definition meld : PQ -> PQ -> PQ := preMeld.
@@ -3380,30 +4186,119 @@ Next Obligation.
   unfold wrapHeap in *.
   destruct w; destruct w0.
   remember (LEQ a a0) as aa0; destruct aa0;
-    unfold rootHeap; simpl;
-      exists None; split; auto;
-        eapply SBH.preInsertHeapLess; eauto.
-  destruct m0; simpl in *; repeat split.
-  Focus 5.
-  destruct m; simpl in *; repeat split.
-  destruct H.
-  destruct H1. eauto.
-  destruct H.
-  destruct H1. eauto.
-  eauto. auto.
-  destruct H0. destruct H1; auto.
-  destruct H0. destruct H1; auto.
-  rewrite <- leqRefl; auto.
-  destruct m; simpl in *; repeat split. Focus 5.
-  destruct m0; simpl in *; repeat split.
-  destruct H0. destruct H1; eauto.
-  destruct H0. destruct H1; eauto.
-  Focus 4.
-  destruct H. destruct H1. lisp.
-  Focus 3. lisp.
-  eapply leqSymm. eauto.
-  eapply leqSymm. eauto.
-  rewrite <- leqRefl; auto.
+    unfold rootHeap; simpl.
+  exists a; lisp.
+  rewrite <- (dblMin a).
+  apply SBH.preInsertHeapLess; lisp.
+  exists a0; lisp.
+  rewrite <- (dblMin a0).
+  apply SBH.preInsertHeapLess; lisp.
+Qed.
+
+Lemma linkCount :
+  forall q f x p,
+    DERP LEQ f ->
+    countT f x (SBH.link p q) 
+    = countT f x p
+    + countT f x q.
+Proof.
+  intros.
+  unfold SBH.link.
+  destruct p; destruct q; lisp.
+  destruct (SBH.O.preLEQ r r0); lisp; try omega.
+Qed.
+
+Lemma insCount :
+  forall q f x p,
+    DERP LEQ f ->
+    countM f x (SBH.ins p q) 
+    = countT f x p
+    + countM f x q.
+Proof.
+  induction q; intros; lisp.
+  remember (Compare_dec.nat_compare (SBH.rank p0) (SBH.rank p)) as pp; 
+    destruct pp; lisp.
+  rewrite IHq. rewrite linkCount. omega. auto. auto.
+  rewrite IHq. rewrite linkCount. omega. auto. auto.
+Qed.
+  
+
+Lemma insCons : 
+  forall y x,
+    ($) <> SBH.ins x y.
+Proof.
+  unfold not;
+  induction y; intros; lisp;
+    unfold not; intros; auto.
+  unfold SBH.ins in H. inversion H.
+  destruct (Compare_dec.nat_compare (SBH.rank x) (SBH.rank p)).
+  eapply IHy; eauto.
+  inversion H.
+  eapply IHy; eauto.
+Qed.
+
+Lemma meldUniqCount :
+  forall f inp inq x,
+    DERP LEQ f ->
+    countM f x (SBH.meldUniq (inp,inq))
+    = countM f x inp
+    + countM f x inq.
+Proof.
+  Check SBH.meldUniq_ind.
+  pose
+    (fun (pq:SBH.preQ * SBH.preQ) r =>
+      let (p,q) := pq in
+        forall f,
+          DERP LEQ f ->
+          forall x,
+            countM f x r = 
+            countM f x p +
+            countM f x q) as P.
+  assert (forall tu, P tu (SBH.meldUniq tu)).
+  apply SBH.meldUniq_ind; unfold P; clear P; lisp; intros.
+  rewrite H; auto. omega.
+  rewrite H; auto. omega.
+  rewrite insCount; auto.
+  rewrite H; auto. 
+  rewrite linkCount; auto. omega.
+  intros.
+  unfold P in *. clear P.
+  pose (H (inp,inq)) as hh.
+  lisp.
+Qed.
+
+Lemma preMeldCount :
+  forall f inp inq x,
+    DERP LEQ f ->
+    countM f x (SBH.preMeld inp inq) 
+    = countM f x inp
+    + countM f x inq.
+Proof.
+  intros; destruct inp; destruct inq; lisp;
+    unfold SBH.preMeld; unfold SBH.uniqify;
+      rewrite SBH.meldUniq_equation; lisp.
+  rewrite insCount; auto.
+  remember (SBH.ins p inp) as pp; destruct pp; 
+    rewrite Heqpp; rewrite insCount; lisp.
+  remember (SBH.ins p inp) as pp; destruct pp.
+  apply insCons in Heqpp. inversion Heqpp.
+  remember (SBH.ins p0 inq) as qq; destruct qq.
+  apply insCons in Heqqq. inversion Heqqq.
+  destruct (Compare_dec.nat_compare (SBH.rank p1) (SBH.rank p2)).
+  rewrite insCount; auto. rewrite linkCount; auto. 
+  rewrite meldUniqCount; auto.
+  rewrite <- insCount; auto. rewrite <- insCount; auto.
+  rewrite <- Heqpp. rewrite <- Heqqq. lisp. omega.
+
+  lisp. rewrite meldUniqCount; lisp.
+  rewrite <- insCount with (p := p); auto. 
+  rewrite <- insCount with (p := p0); auto.
+  rewrite <- Heqpp. rewrite <- Heqqq. lisp. omega.
+
+  lisp. rewrite meldUniqCount; lisp.
+  rewrite <- insCount with (p := p); auto. 
+  rewrite <- insCount with (p := p0); auto.
+  rewrite <- Heqpp. rewrite <- Heqqq. lisp. omega.
 Qed.
 
 Lemma meldCount :
@@ -3416,11 +4311,11 @@ Proof.
   unfold preCount; simpl.
   destruct x0; destruct x1; simpl; lisp.
   destruct b; lisp.
-  destruct b as [v c]; destruct b0 as [w d0]; lisp.
-  remember (LEQ v w) as vw; destruct vw; simpl;
+  destruct b as [v c]; destruct b0 as [w1 d0]; lisp.
+  remember (LEQ v w1) as vw; destruct vw; simpl;
     rewrite insertCountM; simpl; 
       remember (x2 x v) as xv; destruct xv;
-        remember (x2 x w) as xw; destruct xw;
+        remember (x2 x w1) as xw; destruct xw;
           try omega.
 Qed.
 
@@ -3434,35 +4329,51 @@ refine (fun x =>
       end eq_refl
   end).
 destruct x0. simpl in _H. inversion _H.
-destruct b0. simpl in *.
+unfold wrapHeap.
+unfold wrapHeap in w. unfold rootHeap in w.
+destruct w.
+unfold preExtractMin in _H.
+destruct b0; lisp.
 inversion_clear _H; subst.
-remember (SBH.preExtractMin m) as mm; destruct mm.
-destruct p0.
-destruct r. unfold wrapHeap.
-unfold rootHeap; simpl. exists None; split; auto.
-Focus 2. eauto.
+remember (SBH.preExtractMin m) as mm; destruct mm; auto.
+destruct p0; lisp.
+destruct r; lisp.
+unfold rootHeap; lisp.
+Check SBH.preExtractMinHeap.
+assert (SBH.listHeap a0 m0).
+eapply SBH.preExtractMinHelp. Focus 2. eauto. auto.
+assert (SBH.rootHeap a0 (Top a1 m1)).
+eapply SBH.preExtractMinRootHeap. Focus 2. eauto. auto.
+exists a1; lisp.
+rewrite <- (dblMin a1).
+eapply SBH.preMeldHeapSome.
+unfold SBH.rootHeap in H2; lisp.
+replace a1 with (root (Top a1 m1)).
+eapply SBH.preExtractMinHeap. Focus 2. eauto.
+eauto.
+auto.
+Defined.
 
-destruct m; simpl in *; auto. inversion Heqmm.
-remember (SBH.getMin p0 m) as p0m. destruct p0m.
-destruct p1 as [v n c].
-inversion Heqmm. subst. clear Heqmm.
-remember (SBH.split ($) nil c) as nc; destruct nc.
-edestruct SBH.preMeldHeapSome. Focus 4.
+Program Definition deleteMin : PQ -> PQ := preDeleteMin.
+Next Obligation.
+  destruct x; lisp.
+  destruct x; destruct w; unfold wrapHeap; lisp.
+  unfold preDeleteMin.
+  unfold preExtractMin.
+  destruct b.
+  remember (SBH.preExtractMin m) as mm; destruct mm; lisp.
+  destruct p; lisp.
+  destruct r; lisp.
+  unfold rootHeap; lisp.
+  exists a0; lisp.
+  rewrite <- (dblMin a0); apply SBH.preMeldHeapSome.
+  eapply SBH.preExtractMinRootHeap in Heqmm; eauto. lisp.
+  unfold SBH.rootHeap in *; lisp.
+  eapply SBH.preExtractMinHeap in Heqmm; eauto.
+  lisp.
+Qed.
 
-destruct m1; destruct m0. unfold SBH.preMeld.
-unfold SBH.uniqify. rewrite SBH.meldUniq_equation.
-eauto. simpl. auto.
-edestruct SBH.preMeldHeapSome with (y:= (p0:::m0)) (x:=(@cil A)).
-auto. lisp. lisp.
-
-unfold SBH.preMeld. unfold SBH.uniqify. rewrite SBH.meldUniq_equation.
-apply 
-
-edestruct SBH.preMeldHeapSome.
-remember (SBH.getMin p0 m) as p0m; destruct p0m
-
-
-Parameter extractMinCount :
+Lemma extractMinCount :
   forall inp,
     match findMin inp with
       | None => None = extractMin inp
@@ -3471,109 +4382,248 @@ Parameter extractMinCount :
         /\ forall same y,
           count same y z = count same y (deleteMin inp)
     end.
+Proof. 
+  intros.
+  destruct inp.
+  destruct x. destruct w. lisp.
+  destruct w. lisp.
+  unfold findMin. 
+  unfold preFindMin. lisp.
+  destruct b; lisp.
+  lisp.
+  exists ( 
+    exist (fun x0 : bootWrap => wrapHeap x0)
+    match SBH.preExtractMin m with
+      | Some (pair (Top w d) cs) => Full (Top w (SBH.preMeld d cs))
+      | None => Empty
+    end
+    (match
+       SBH.preExtractMin m as o
+         return
+         (o = SBH.preExtractMin m ->
+           match
+             match o with
+               | Some (pair (Top w d) cs) =>
+                 Full (Top w (SBH.preMeld d cs))
+               | None => Empty
+             end
+             with
+             | Empty => True
+             | Full y => rootHeap y
+           end)
+       with
+       | Some p0 =>
+         fun Heqmm : Some p0 = SBH.preExtractMin m =>
+           (let (r, m0) as p
+             return
+             (Some p = SBH.preExtractMin m ->
+               match
+                 (let (r, cs) := p in
+                   match r with
+                     | Top w d => Full (Top w (SBH.preMeld d cs))
+                   end)
+                 with
+                 | Empty => True
+                 | Full y => rootHeap y
+               end) := p0 in
+             fun Heqmm0 : Some (r, m0) = SBH.preExtractMin m =>
+               match
+                 r as r0
+                   return
+                   (Some (r0, m0) = SBH.preExtractMin m ->
+                     match
+                       match r0 with
+                         | Top w d => Full (Top w (SBH.preMeld d m0))
+                       end
+                       with
+                       | Empty => True
+                       | Full y => rootHeap y
+                     end)
+                 with
+                 | Top a1 m1 =>
+                   fun Heqmm1 : Some (Top a1 m1, m0) = SBH.preExtractMin m =>
+                     ex_intro
+                     (fun v : OO.A =>
+                       true = OO.LEQ v a1 /\
+                       feapM OO.LEQ a1 (SBH.preMeld m1 m0)) a1
+                     (conj (OO.leqRefl a1)
+                       (eq_ind (SBH.oomin a1 a1)
+                         (fun a0 : A => feapM OO.LEQ a0 (SBH.preMeld m1 m0))
+                         (SBH.preMeldHeapSome a1 m1 a1 m0
+                           match
+                             SBH.preExtractMinRootHeap m a f Heqmm1
+                             with
+                             | conj _ H3 => H3
+                           end
+                           match SBH.preExtractMinHeap a m f Heqmm1 with
+                             | conj _ H0 => H0
+                           end) a1 (dblMin a1)))
+               end Heqmm0) Heqmm
+       | None => fun _ : None = SBH.preExtractMin m => I
+     end eq_refl)).
+lisp.
+Qed.
 
 (* TODO: extractList *)
 
-  Parameter deleteMinCount :
-    forall inp,
-      match findMin inp with
-        | None => forall same x, count same x (deleteMin inp) = 0
-        | Some x =>
-          forall same y, 
-            let newCount := count same y (deleteMin inp) in
-              count same y inp =
-              if check same y x
-                then S newCount
-                else newCount
-      end.
 
-
-
-Inductive rankT : preT -> Prop :=
-  trank : forall r i c,
-          SBH.rankP (Node r i c) ->
-          rankR r ->
-          rankT (Node r i c)
-with rankR : Boot -> Prop :=
-  rrank : forall h l,
-          SBH.Aml rankT l ->
-          SBH.skewBinaryRank l ->
-          rankR (Top h l).
-Hint Constructors rankT.
-Hint Constructors rankR.
-
-Definition rankB x :=
-  match x with
-    | Empty => True
-    | Full y => rankR y
-  end.
-Hint Unfold rankB.
-
-Lemma insertRankT :
+Lemma getMinSplit :
   forall xs x,
-  rankR x ->
-  SBH.Aml rankT xs ->
-  SBH.Aml rankT (SBH.preInsert x xs).
+    forall y z,
+      (y,z) = SBH.getMin x xs ->
+      forall f w, 
+        DERP LEQ f ->
+        countT f w y
+        + countM f w z
+        = countT f w x 
+        + countM f w xs.
 Proof.
-  induction xs; simpl; intros.
-  constructor; auto. constructor; auto. unfold SBH.rankP; auto.
-  inversion_clear H0; subst.
-  destruct xs.
-  constructor; auto. constructor; auto. unfold SBH.rankP; auto.
-  inversion_clear H2; subst.
-  destruct a as [b j q]; destruct p as [c k r]; simpl.
-  inversion H1; subst; inversion H0; subst; simpl; auto;
-  remember (EqNat.beq_nat j k) as jk; destruct jk; simpl; auto;
-  remember (SBH.O.LEQ x b) as xb; destruct xb; simpl; auto;
-  remember (SBH.O.LEQ x c) as xc; destruct xc; simpl; auto;
-  remember (SBH.O.LEQ b c) as bc; destruct bc; simpl; auto;
-    constructor; auto; constructor; auto.
-  remember (Eqneq_nat
-  
+  induction xs; lisp; intros.
+  inversion_clear H; lisp.
+  remember (SBH.getMin p xs) as pxs; destruct pxs.
+  eapply IHxs in Heqpxs; eauto. rewrite <- Heqpxs. Show Existentials.
+  remember (SBH.O.preLEQ (SBH.root x) (SBH.root p0)) as xp; destruct xp;
+    inversion H; subst; lisp. 
+  omega.
+Qed.
 
-Lemma meldRank :
-  forall p q,
-    rankB p -> rankB q -> rankB (preMeld p q).
+Lemma splitSplit :
+  forall e a b c d,
+    (a,b) = SBH.split c d e ->
+      forall f w, 
+        DERP LEQ f ->
+        countM f w a
+        + fold_right plus 0 (map (countR f w) b)
+        = countM f w c 
+        + fold_right plus 0 (map (countR f w) d)
+        + countM f w e.
 Proof.
-  intros p q P Q.
-  unfold preMeld.
-  destruct p as [|p]; destruct q as [|q]; auto.
-  destruct p; auto.
-  destruct p as [v c]; destruct q as [w d]; auto.
-  remember (LEQ v w) as vw; destruct vw; simpl.
-  constructor.
-  simpl in *.
-  inversion P; inversion Q; subst.
-  induction H1.
-  simpl. constructor; auto. constructor; auto. unfold SBH.rankP; auto.
+  induction e; intros; lisp.
+  inversion_clear H; subst; try omega.
+  destruct p; lisp.
+  destruct m; lisp.
+  eapply IHe in H. lisp. rewrite H. omega. auto.
+  eapply IHe in H. lisp. rewrite H. omega. auto.
+Qed.
+
+
+Lemma countFold :
+  forall l f w v,
+    countM f w (fold_right SBH.preInsert v l) 
+    = countM f w v 
+    + fold_right plus 0 (map (countR f w) l).
+Proof.
+  induction l; lisp; intros.
+  rewrite insertCountM.
+  rewrite IHl.  omega.
+Qed.
+
+(*
+Lemma countFold :
+  forall l f w v,
+    countM f w (fold_right SBH.preInsert v l) 
+    = countM f w v 
+    + countM f w (fold_right SBH.preInsert ($) l).
+Proof.
+  induction l; lisp; intros.
+  repeat (rewrite insertCountM).
+  rewrite IHl.  omega.
+Qed.
+*)
+
+Lemma preExtractMinSplit :
+  forall x y z,
+    Some (y,z) = SBH.preExtractMin x ->
+    forall f w, 
+      DERP LEQ f ->
+      countM f w x
+      = countR f w y 
+      + countM f w z.
+Proof.
+  intros.
+  destruct x; lisp.
+  inversion H.
+  remember (SBH.getMin p x) as px; destruct px; lisp.
+  destruct p0; lisp.
+  remember (SBH.split ($) nil m0) as mm; destruct mm; lisp.
+  inversion_clear H; subst.
+  erewrite <- getMinSplit; eauto. lisp.
+  assert (countM f w m0 + countM f w m =
+    countM f w (fold_right SBH.preInsert (SBH.preMeld m m1) l)).
+  Focus 2. omega.
+
+  eapply splitSplit in Heqmm; eauto. lisp.
+(*1*)
+  rewrite countFold. rewrite preMeldCount; auto.
+  rewrite <- Heqmm. omega.
+(*1*)
+Qed.
   
-  auto.
-  Check rankT_ind.
+Lemma deleteMinCount :
+  forall inp,
+    match findMin inp with
+      | None => forall same x, count same x (deleteMin inp) = 0
+      | Some x =>
+        forall same y, 
+          let newCount := count same y (deleteMin inp) in
+            count same y inp =
+            if check same y x
+              then S newCount
+              else newCount
+    end.
+Proof.
+  intros.
+  destruct inp.
+  destruct x; lisp.
+  destruct w; lisp.
+  unfold findMin; lisp.
+  destruct b; lisp.
+  intros.
+  unfold count; lisp.
+  destruct same; lisp.
+  remember (x0 y a) as xya; destruct xya; lisp.
+  unfold preCount; lisp.
+  unfold preDeleteMin; lisp.
+  remember (SBH.preExtractMin m) as mm; destruct mm; lisp.
+  destruct p; lisp. destruct r; lisp.
+  remember (x0 y a0) as xya0; destruct xya0; lisp.
+  erewrite preExtractMinSplit; auto. Focus 2. eauto.
+  rewrite preMeldCount; auto.
+  lisp. rewrite <- Heqxya0. omega.
+  erewrite preExtractMinSplit; auto. Focus 2. eauto.
+  rewrite preMeldCount; auto.
+  lisp. rewrite <- Heqxya0. omega.
+  destruct m; lisp. inversion Heqmm.
   
+  unfold preCount; lisp.
+  unfold preDeleteMin; lisp.
+  remember (SBH.preExtractMin m) as mm; destruct mm; lisp.
+  destruct p; lisp. destruct r; lisp.
+  remember (x0 y a0) as xya0; destruct xya0; lisp.
+  erewrite preExtractMinSplit; auto. Focus 2. eauto.
+  rewrite preMeldCount; auto.
+  lisp. rewrite <- Heqxya0. omega.
+  erewrite preExtractMinSplit; auto. Focus 2. eauto.
+  rewrite preMeldCount; auto.
+  lisp. rewrite <- Heqxya0. omega.
+  destruct m; lisp. inversion Heqmm.
+Qed.
 
+End InlineBoot.
 
+Print PQVerify.
 
-    | Top _ l => SBH.Aml rankT l /\ SBH.skewBinaryRank l
-  end.
+Module InlineV(OO:Order) <: PQVerify.
 
-Fixpoint rankT (x:preT) :=
-  SBH.rankP x /\
-  match x with 
-    | Node r _ _ => rankR r
-  end.
-with rankR x :=
-  match x with
-    | Top _ l => SBH.Aml rankT l /\ SBH.skewBinaryRank l
-  end.
+Module PQS := InlineBoot(OO).
+Definition count := PQS.count.
+Definition check := PQS.check.
+Definition countSAME := PQS.countSAME.
+Definition emptyCount := PQS.emptyCount.
+Definition insertCount := PQS.insertCount.
+Definition findMinCount := PQS.findMinCount.
+Definition extractMinCount := PQS.extractMinCount.
+Definition deleteMinCount := PQS.deleteMinCount.
+Definition meldCount := PQS.meldCount.
 
-
-Inductive Tree :=
-  Node : A -> list Tree -> nat -> list Tree -> Tree.
-
-Fixpoint size a := S
-  match a with
-    | Node b _ c =>
-      let add x := fold_right plus 0 (map size x) in
-        add b + add c
-  end.
-
+End InlineV.
