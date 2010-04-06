@@ -2,7 +2,10 @@ COQC=coqc -opt
 
 .PHONY: all
 
-all: SkewBinHeapVerify.vo
+all: Inline.vo
+
+Inline.vo: Inline.v OrderSig.vo PQSig.vo
+	$(COQC) Inline.v
 
 PQSig.vo: PQSig.v OrderSig.vo
 	$(COQC) PQSig.v
