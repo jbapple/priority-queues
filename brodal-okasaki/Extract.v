@@ -7,6 +7,7 @@ Extract Inductive option =>
 Extract Inductive bool => 
   "Prelude.Bool" ["Prelude.True" "Prelude.False"].
 Extract Inductive prod => "(,)" ["(,)"].
+Extract Inductive list => "[]" ["[]" "(:)"].
 
 Extraction Inline and_rect sig_rect proj1_sig LEQ.
 Extraction Inline pLEQ aLEQ meldUniq_terminate.
