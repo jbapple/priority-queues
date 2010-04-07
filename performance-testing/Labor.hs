@@ -94,8 +94,8 @@ instance H.Heap (MinQueue a) where
     empty = Empty
     insert = Labor.insert
     extractMin = Labor.extract
-    findMin = error "MinQueue findMin"
-    meld = error "MinQueue meld"
+    findMin = top
+    meld = union
 
 -- | Type which orders only based on its priority value.  Useful for putting in a priority queue
 -- which is meant to account for both an ordering value and other information.
