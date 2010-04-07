@@ -1,359 +1,3 @@
-(*
-Set Implicit Arguments.
-
-Require Export PQSig.
-Require Export List.
-
-Inductive Tree A `{ORDER A} :=
-  Node : Root  -> nat -> Many  -> Tree 
-with Root A `{ORDER A} :=
-  Top : A -> Many  -> Root 
-with Many A `{ORDER A} :=
-  Cil : Many 
-| Nons : Tree  -> Many  -> Many .
-
-Set Maximal Implicit Insertion.
-Implicit Arguments Cil [A].
-Unset Maximal Implicit Insertion.
-
-Scheme tree_w := Induction for Tree Sort Prop
-with root_w := Induction for Root Sort Prop
-with ml_w := Induction for Many Sort Prop.
-
-Combined Scheme all_ind from tree_w, root_w, ml_w.
-
-Notation "[[ x | .. | y ]]" := (Nons x .. (Nons y Cil) ..).
-Notation "a ::: b" := (Nons a b) (at level 60, right associativity).
-Notation "$" := Cil (at level 60).
-
-Definition rank A o (x:@Tree A o) :=
-  match x with
-    | Node _ r _ => r
-  end.
-
-Definition zoot A o (x:@Root A o) :=
-  match x with
-    | Top v _ => v
-  end.
-
-Definition toot A o (x:@Tree A o) :=
-  match x with
-    | Node v _ _ => zoot v
-  end.
-
-Definition root A o (x:@Tree A o) :=
-  match x with
-    | Node v _ _ => v
-  end.
-
-Fixpoint toListT {A o} (x:@Tree A o) (r:list A) {struct x} : list A :=
-  match x with
-    | Node h _ t => toListR h (toListM t r)
-  end
-with toListR {A o} (x:@Root A o) r :=
-  match x with
-    | Top v t => toListM t (v::r)
-  end
-with toListM {A o} (x:@Many A o) r : list A :=
-  match x with
-    | Cil => r
-    | Nons h t => toListT h (toListM t r)
-  end.
-
-Extraction toListT.
-
-Section Foo.
-
-  Variable nn:nat.
-  Definition dob := nn + nn.
-
-End Foo.
-
-Extraction Language Haskell.
-Recursive Extraction dob.
-Check dob.
-
-(*Parameter (ordInst:forall A, ORDER A).*)
-
-Set Maximal Implicit Insertion.
-Implicit Arguments ordInst [A].
-Unset Maximal Implicit Insertion.
-
-Definition aLEQ A := @LEQ A ordInst.
-Definition aLeqRefl A := @leqRefl A ordInst.
-Definition aLeqSymm A := @leqSymm A ordInst.
-Definition aLeqTransTrue A := @leqTransTrue A ordInst.
-Definition aLeqTransFalse A := @leqTransFalse A ordInst.
-
-Fixpoint feapT A v (x:Tree A) {struct x} : Prop :=
-  match x with
-    | Node wc n d =>
-      feapR v wc
-      /\ match wc with
-           | Top w c => feapM w d
-         end
-  end
-with feapR A v (x:Root A) {struct x} : Prop :=
-  match x with
-    | Top w c => true = aLEQ v w /\ feapM w c
-  end
-with feapM A v (x:Many A) {struct x} : Prop :=
-  match x with
-    | ($) => True
-    | x:::xs => feapT v x /\ feapM v xs
-  end.
-
-Definition pLEQ {A} (x y:Root A) :=
-  match x,y with
-    Top p _, Top q _ => aLEQ p q
-  end.
-Hint Unfold pLEQ.
-
-Lemma pLeqRefl: forall {A} (x:Root A), true = pLEQ x x.
-Proof.
-  unfold pLEQ.
-  destruct x.
-  apply aLeqRefl.
-Qed.
-
-Lemma pLeqTransTrue : 
-  forall {A} (x y z:Root A),
-    true = pLEQ x y ->
-    true = pLEQ y z ->
-    true = pLEQ x z.
-Proof.
-  intros. 
-  destruct x;
-    destruct y;
-      destruct z;
-        simpl in *.
-  eauto using aLeqTransTrue.
-Qed.
-
-Lemma pLeqTransFalse :
-  forall {A} (x y z:Root A),
-    false = pLEQ x y ->
-    false = pLEQ y z ->
-    false = pLEQ x z.
-Proof.
-  intros.
-  destruct x;
-    destruct y;
-      destruct z;
-        simpl in *.
-  eauto using aLeqTransFalse.
-Qed.
-
-Lemma pLeqSymm : 
-  forall {A} (x y:Root A),
-    false = pLEQ x y ->
-    true = pLEQ y x.
-Proof.
-  intros.
-  destruct x;
-    destruct y;
-      simpl in *.
-  eauto using aLeqSymm.
-Qed.
-
-Instance pOrder {A} : ORDER (Root A) := {
-  LEQ := pLEQ;
-  leqRefl := pLeqRefl;
-  leqSymm := pLeqSymm;
-  leqTransTrue := pLeqTransTrue;
-  leqTransFalse := pLeqTransFalse
-}.
-
-Require Export Arith.
-Require Export List.
-Require Export Program.
-Require Export Omega.
-Require Export Recdef.
-Require Export Coq.Program.Wf.
-Require Export caseTactic.
-
-(* TODO: stability *)
-
-Definition link {A} (x y:Tree A) :=
-  match x, y with
-    | Node v n p, Node w m q =>
-      if pLEQ v w 
-        then Node v (S n) (y ::: p)
-        else Node w (S m) (x ::: q)
-  end.
-
-Definition skewLink {A} (x y z:Tree A) :=
-  match x, y, z with
-    | Node a i p, 
-      Node b j q,
-      Node c k r =>
-      if pLEQ a b
-        then if pLEQ a c
-          then Node a (S j) [[y | z]]
-          else Node c (S k) (x:::y:::r)
-        else if pLEQ b c
-          then Node b (S j) (x:::z:::q)
-          else Node c (S k) (x:::y:::r)
-  end.
-
-Fixpoint ins {A} (t:Tree A) xs :=
-  match xs with
-    | ($) => [[t]]
-    | y:::ys =>
-      match nat_compare (rank t) (rank y) with
-        | Lt => t:::xs
-        | _ => ins (link t y) ys
-      end
-  end.
-
-Definition uniqify {A} (xs:Many A) :=
-  match xs with
-    | ($) => ($)
-    | y:::ys => ins y ys
-  end.
-
-Fixpoint length {A} (x:Many A) :=
-  match x with
-    | ($) => 0
-    | _:::xs => S (length xs)
-  end.
-
-Definition combLen {A} (xy:Many A * Many A) := 
-  let (x,y) := xy in
-    length x + length y.
-
-Function meldUniq (A:Type) (xy:Many A * Many A) {measure combLen xy} : Many A :=
-  match xy with
-    | (($),y) => y
-    | (x,($)) => x
-    | (p:::ps,q:::qs) => 
-      match nat_compare (rank p) (rank q) with
-        | Lt => p ::: meldUniq (ps, q:::qs)
-        | Gt => q ::: meldUniq (p:::ps, qs)
-        | Eq => ins (link p q) (meldUniq (ps,qs))
-      end
-  end.
-Proof.
-  intros; subst.
-  unfold combLen.
-  simpl; omega.
-
-  intros; subst.
-  unfold combLen.
-  simpl; omega.
-
-  intros; subst.
-  unfold combLen.
-  simpl; omega.
-Qed.
-
-Definition skewEmpty {A} : Many A := ($).
-
-Definition skewInsert {A} (x:Root A) ys :=
-  match ys with
-    | z1:::z2:::zr =>
-      if beq_nat (rank z1) (rank z2)
-        then skewLink (Node x 0 ($)) z1 z2 ::: zr
-        else Node x 0 ($) ::: ys
-    | _ => Node x 0 ($) ::: ys
-  end.
-
-Definition skewMeld {A} (x y:Many A) :=
-  meldUniq (uniqify x, uniqify y).
-
-Fixpoint preFindMinHelp {A} (x:Tree A) xs :=
-  match xs with 
-    | ($) => root x
-    | y:::ys => 
-      let z := preFindMinHelp y ys in
-        let w := root x in
-          if pLEQ w z
-            then w
-            else z
-  end.
-
-Definition skewFindMin {A} (x:Many A) :=
-  match x with
-    | ($) => None
-    | y:::ys => Some (preFindMinHelp y ys)
-  end.
-
-Fixpoint getMin {A} (x:Tree A) xs :=
-  match xs with
-    | ($) => (x,($))
-    | y:::ys =>
-      let (t,ts) := getMin y ys in
-        if pLEQ (root x) (root t)
-          then (x,xs)
-          else (t,x:::ts)
-  end.
-
-Definition children {A} (x:Tree A) :=
-  match x with 
-    | Node _ _ c => c
-  end.
-
-Fixpoint split {A} (t:Many A) x c :=
-  match c with
-    | ($) => (t,x)
-    | d:::ds => 
-      match children d with
-        | ($) => split t ((root d)::x) ds
-        | _ => split (d:::t) x ds
-      end
-  end.
-
-Definition skewExtractMin {A} (x:Many A) :=
-  match x with
-    | ($) => None
-    | y:::ys => Some
-      match getMin y ys with
-        | (Node v _ c,t) => (v,
-          let (p,q) := split ($) [] c in
-            fold_right skewInsert (skewMeld t p) q)
-      end
-  end.
-
-Definition skewDeleteMin {A} (x:Many A) :=
-  match skewExtractMin x with
-    | None => x
-    | Some (_,y) => y
-  end.
-
-
-Fixpoint skewToListT {A} (x:Tree A) r {struct x} :=
-  match x with
-    | Node h _ t => h :: (skewToListM t r)
-  end
-with skewToListM {A} (x:Many A) r  :=
-  match x with
-    | Cil => r
-    | Nons h t => skewToListT h (skewToListM t r)
-  end.
-
-Definition skewToList {A} (x:Many A) := skewToListM x nil.
-
-Instance skewBin {A} : @MINQ (Root A) (Many A) pOrder := {
-  empty := skewEmpty;
-  insert := skewInsert;
-  findMin := skewFindMin;
-  extractMin := skewExtractMin;
-  toList := skewToList;
-  meld := skewMeld
-}.
-
-Extraction Language Haskell.
-Recursive Extraction skewBin.
-
-End Order.
-End Carrier.
-
-Print skewBin.
-
-Extraction Language Haskell.
-Recursive Extraction skewBin.
-*)
-
 Set Implicit Arguments.
 
 Require Export PQSig.
@@ -2800,333 +2444,30 @@ Instance bootV : MINQV bootPQ := {
   extractMinCount := extractMinCount
 }.
 
-
-Hint Unfold check.
-
-
-
-Ltac lisp := simpl in *;
-  match goal with
-    | [ H : _ /\ _ |- _ ] => destruct H; lisp
-    | [ |- _ /\ _ ] => split; lisp
-    | [ H : treeHeap _ |- _ ] => unfold treeHeap in H; lisp
-    | [ H : rootHeap _ |- _ ] => unfold rootHeap in H; lisp
-    | [ H : feapM _ |- _ ] => unfold feapM in H; lisp
-    | [ _ : false = OO.LEQ ?a ?b |- true = OO.LEQ ?b ?a] 
-      => apply OO.leqSymm; auto; lisp
-    |  [_ : true = OO.LEQ ?a ?b , 
-        _ : true = OO.LEQ ?b ?c 
-        |- true = OO.LEQ ?a ?c] => eapply OO.leqTransTrue; eauto; lisp
-    |  [_ : true = OO.LEQ ?a ?b , 
-        _ : false = OO.LEQ ?a ?c 
-        |- true = OO.LEQ ?c ?b] => 
-    assert (true = OO.LEQ c a); lisp
-    |  [_ : true = OO.LEQ ?a ?b , 
-        _ : false = OO.LEQ ?c ?b 
-        |- true = OO.LEQ ?a ?c] => 
-    assert (true = OO.LEQ b c); lisp
-    |  [_ : false = OO.LEQ ?a ?b , 
-        _ : false = OO.LEQ ?b ?c 
-        |- true = OO.LEQ ?c ?a] => 
-    assert (false = OO.LEQ a c); lisp
-    |  [_ : false = OO.LEQ ?a ?b , 
-        _ : false = OO.LEQ ?b ?c 
-        |- false = OO.LEQ ?a ?c] => 
-    eapply OO.leqTransFalse; eauto; lisp
-    | [ |- true = OO.LEQ ?a ?a] => apply OO.leqRefl; auto; lisp
-    | [ |- match ?a with | Top _ _ => True end] => destruct a; auto; lisp
-    | _ => auto
-  end.
-
 (*
-Ltac lisp := simpl in *;
-  match goal with
-    | [ H : _ /\ _ |- _ ] => destruct H; lisp
-    | [ |- _ /\ _ ] => split; lisp
-    | [ H : treeHeap _ |- _ ] => destruct H; lisp
-    | [ H : rootHeap _ |- _ ] => destruct H; lisp
-    | [ H : feapM _ |- _ ] => destruct H; lisp
-    | _ => auto
-  end.
+End Order.
+End Carrier.
 *)
 
-Lemma dblMin : forall x, SBH.amin x x = x.
-Proof.
-  unfold SBH.amin.
-  Check LEQ. Check leqRefl.
-  intros. rewrite <- leqRefl; auto.
-Qed.
+(*
+Extraction Language Haskell.
+Recursive Extraction bootPQ.
+Extraction Inline and_rect sig_rect proj1_sig LEQ.
+Recursive Extraction bootPQ.
+Extraction Inline aLEQ meldUniq_terminate.
+Extraction Inline 
+  preInsert preFindMin preMeld 
+  preExtractMin preEmpty preToList.
+Recursive Extraction bootPQ empty insert findMin extractMin toList meld.
+*)
+(*
+Extraction "ExtractBoot.hs" 
+  bootPQ empty insert findMin extractMin toList meld.
+Recursive Extraction empty.
+*)
 
 
-
-
-
-Check all_ind.
-Print all_ind.
-
-
-
-
-Program Definition deleteMin : PQ -> PQ := preDeleteMin.
-Next Obligation.
-  destruct x; lisp.
-  destruct x; destruct w; unfold wrapHeap; lisp.
-  unfold preDeleteMin.
-  unfold preExtractMin.
-  destruct b.
-  remember (skewExtractMin m) as mm; destruct mm; lisp.
-  destruct p; lisp.
-  destruct r; lisp.
-  unfold rootHeap; lisp.
-  exists a0; lisp.
-  rewrite <- (dblMin a0); apply skewMeldHeapSome.
-  eapply skewExtractMinRootHeap in Heqmm; eauto. lisp.
-  unfold SBH.feapR in *; lisp.
-  eapply skewExtractMinHeap in Heqmm; eauto.
-  lisp.
-Qed.
-
-Lemma extractMinCount :
-  forall inp,
-    match findMin inp with
-      | None => None = extractMin inp
-      | Some x => exists z,
-        Some (x,z) = extractMin inp
-        /\ forall same y,
-          count same y z = count same y (deleteMin inp)
-    end.
-Proof. 
-  intros.
-  destruct inp.
-  destruct x. destruct w. lisp.
-  destruct w. lisp.
-  unfold findMin. 
-  unfold preFindMin. lisp.
-  destruct b; lisp.
-  lisp.
-  exists ( 
-    exist (fun x0 : bootWrap => wrapHeap x0)
-    match skewExtractMin m with
-      | Some (pair (Top w d) cs) => Full (Top w (skewMeld d cs))
-      | None => Empty
-    end
-    (match
-       skewExtractMin m as o
-         return
-         (o = skewExtractMin m ->
-           match
-             match o with
-               | Some (pair (Top w d) cs) =>
-                 Full (Top w (skewMeld d cs))
-               | None => Empty
-             end
-             with
-             | Empty => True
-             | Full y => rootHeap y
-           end)
-       with
-       | Some p0 =>
-         fun Heqmm : Some p0 = skewExtractMin m =>
-           (let (r, m0) as p
-             return
-             (Some p = skewExtractMin m ->
-               match
-                 (let (r, cs) := p in
-                   match r with
-                     | Top w d => Full (Top w (skewMeld d cs))
-                   end)
-                 with
-                 | Empty => True
-                 | Full y => rootHeap y
-               end) := p0 in
-             fun Heqmm0 : Some (r, m0) = skewExtractMin m =>
-               match
-                 r as r0
-                   return
-                   (Some (r0, m0) = skewExtractMin m ->
-                     match
-                       match r0 with
-                         | Top w d => Full (Top w (skewMeld d m0))
-                       end
-                       with
-                       | Empty => True
-                       | Full y => rootHeap y
-                     end)
-                 with
-                 | Top a1 m1 =>
-                   fun Heqmm1 : Some (Top a1 m1, m0) = skewExtractMin m =>
-                     ex_intro
-                     (fun v : OO.A =>
-                       true = OO.LEQ v a1 /\
-                       feapM OO.LEQ a1 (skewMeld m1 m0)) a1
-                     (conj (OO.leqRefl a1)
-                       (eq_ind (SBH.amin a1 a1)
-                         (fun a0 : A => feapM OO.LEQ a0 (skewMeld m1 m0))
-                         (skewMeldHeapSome a1 m1 a1 m0
-                           match
-                             skewExtractMinRootHeap m a f Heqmm1
-                             with
-                             | conj _ H3 => H3
-                           end
-                           match skewExtractMinHeap a m f Heqmm1 with
-                             | conj _ H0 => H0
-                           end) a1 (dblMin a1)))
-               end Heqmm0) Heqmm
-       | None => fun _ : None = skewExtractMin m => I
-     end eq_refl)).
-lisp.
-Qed.
-
-(* TODO: extractList *)
-
-
-Lemma getMinSplit :
-  forall xs x,
-    forall y z,
-      (y,z) = getMin x xs ->
-      forall f w, 
-        DERP LEQ f ->
-        countT f w y
-        + countM f w z
-        = countT f w x 
-        + countM f w xs.
-Proof.
-  induction xs; lisp; intros.
-  inversion_clear H; lisp.
-  remember (getMin p xs) as pxs; destruct pxs.
-  eapply IHxs in Heqpxs; eauto. rewrite <- Heqpxs. Show Existentials.
-  remember (SBH.O.pLEQ (SBH.root x) (SBH.root p0)) as xp; destruct xp;
-    inversion H; subst; lisp. 
-  omega.
-Qed.
-
-Lemma splitSplit :
-  forall e a b c d,
-    (a,b) = split c d e ->
-      forall f w, 
-        DERP  f ->
-        countM f w a
-        + fold_right plus 0 (map (countR f w) b)
-        = countM f w c 
-        + fold_right plus 0 (map (countR f w) d)
-        + countM f w e.
-Proof.
-  induction e; intros; lisp.
-  inversion_clear H; subst; try omega.
-  destruct p; lisp.
-  destruct m; lisp.
-  eapply IHe in H. lisp. rewrite H. omega. auto.
-  eapply IHe in H. lisp. rewrite H. omega. auto.
-Qed.
-
-
-Lemma countFold :
-  forall l f w v,
-    countM f w (fold_right skewInsert v l) 
-    = countM f w v 
-    + fold_right plus 0 (map (countR f w) l).
-Proof.
-  induction l; lisp; intros.
-  rewrite insertCountM.
-  rewrite IHl.  omega.
-Qed.
-
-Lemma preExtractMinSplit :
-  forall x y z,
-    Some (y,z) = skewExtractMin x ->
-    forall f w, 
-      DERP f ->
-      countM f w x
-      = countR f w y 
-      + countM f w z.
-Proof.
-  intros.
-  destruct x; lisp.
-  inversion H.
-  remember (getMin p x) as px; destruct px; lisp.
-  destruct p0; lisp.
-  remember (split ($) nil m0) as mm; destruct mm; lisp.
-  inversion_clear H; subst.
-  erewrite <- getMinSplit; eauto. lisp.
-  assert (countM f w m0 + countM f w m =
-    countM f w (fold_right skewInsert (skewMeld m m1) l)).
-  Focus 2. omega.
-
-  eapply splitSplit in Heqmm; eauto. lisp.
-(*1*)
-  rewrite countFold. rewrite preMeldCount; auto.
-  rewrite <- Heqmm. omega.
-(*1*)
-Qed.
-  
-Lemma deleteMinCount :
-  forall inp,
-    match findMin inp with
-      | None => forall same x, count same x (deleteMin inp) = 0
-      | Some x =>
-        forall same y, 
-          let newCount := count same y (deleteMin inp) in
-            count same y inp =
-            if check same y x
-              then S newCount
-              else newCount
-    end.
-Proof.
-  intros.
-  destruct inp.
-  destruct x; lisp.
-  destruct w; lisp.
-  unfold findMin; lisp.
-  destruct b; lisp.
-  intros.
-  unfold count; lisp.
-  destruct same; lisp.
-  remember (x0 y a) as xya; destruct xya; lisp.
-  unfold preCount; lisp.
-  unfold preDeleteMin; lisp.
-  remember (skewExtractMin m) as mm; destruct mm; lisp.
-  destruct p; lisp. destruct r; lisp.
-  remember (x0 y a0) as xya0; destruct xya0; lisp.
-  erewrite preExtractMinSplit; auto. Focus 2. eauto.
-  rewrite preMeldCount; auto.
-  lisp. rewrite <- Heqxya0. omega.
-  erewrite preExtractMinSplit; auto. Focus 2. eauto.
-  rewrite preMeldCount; auto.
-  lisp. rewrite <- Heqxya0. omega.
-  destruct m; lisp. inversion Heqmm.
-  
-  unfold preCount; lisp.
-  unfold preDeleteMin; lisp.
-  remember (skewExtractMin m) as mm; destruct mm; lisp.
-  destruct p; lisp. destruct r; lisp.
-  remember (x0 y a0) as xya0; destruct xya0; lisp.
-  erewrite preExtractMinSplit; auto. Focus 2. eauto.
-  rewrite preMeldCount; auto.
-  lisp. rewrite <- Heqxya0. omega.
-  erewrite preExtractMinSplit; auto. Focus 2. eauto.
-  rewrite preMeldCount; auto.
-  lisp. rewrite <- Heqxya0. omega.
-  destruct m; lisp. inversion Heqmm.
-Qed.
-
-End InlineRoot.
-
-Print PQVerify.
-
-Module InlineV(OO:Order) <: PQVerify.
-
-Module PQS := InlineRoot(OO).
-Definition count := PQS.count.
-Definition check := PQS.check.
-Definition countSAME := PQS.countSAME.
-Definition emptyCount := PQS.emptyCount.
-Definition insertCount := PQS.insertCount.
-Definition findMinCount := PQS.findMinCount.
-Definition extractMinCount := PQS.extractMinCount.
-Definition deleteMinCount := PQS.deleteMinCount.
-Definition meldCount := PQS.meldCount.
-
-End InlineV.
+Hint Unfold check.
 
 Inductive rankN : Tree -> nat -> Prop :=
   singleton : forall x, rankN (Node x 0 ($)) 0
@@ -3326,7 +2667,7 @@ Proof.
     SCase "xs = nil".
       eauto.
     SCase "xs = p ::: _".
-      simpl.
+      simpl. rename t into p.
       assert (nat_compare (rank x) (rank p) = Lt).
       destruct x; destruct p; simpl.
       inversion H; subst.
@@ -3351,7 +2692,7 @@ Qed.
 Lemma preInsertRank :
   forall x ys,
     skewBinaryRank ys ->
-    skewBinaryRank (preInsert x ys).
+    skewBinaryRank (skewInsert x ys).
 Proof with auto.
   intros x ys P.
   destruct ys.
@@ -3363,7 +2704,7 @@ Proof with auto.
       eapply last.
       apply singleton.
   Case "ys = p ::: _".
-    unfold preInsert.
+    unfold skewInsert.
     destruct ys.
     SCase "ys = nil".
       rename P into R.
@@ -3380,8 +2721,8 @@ Proof with auto.
         SSSCase "impossible".
           inversion H3.
     SCase "ys = p0 ::: _".
-      rename p0 into q.
-      rename P into R.
+      rename t0 into q.
+      rename P into R. rename t into p.
       remember (beq_nat (rank p) (rank q)) as pq; destruct pq.
       SSCase "rank p = rank q".
         assert (rank p = rank q) as pq. apply beq_nat_true; auto.
@@ -3406,12 +2747,11 @@ Proof with auto.
           inversion H4; subst.
           eapply vanilla; auto.
 
-          inversion H5.
-          eapply skew; auto. 
-          subst; auto.
+          inversion H5; subst.
+          eapply skew; auto.
           
           eapply vanilla; auto.
-          apply next with (m := m).
+          apply next with (m := S m0).
           eapply skewLinkRank; auto.
           omega. auto.
       SSCase "rank p <> rank q".
@@ -3630,25 +2970,25 @@ Lemma preMeldRank :
   forall x y,
     skewBinaryRank x ->
     skewBinaryRank y ->
-    skewBinaryRank (preMeld x y).
+    skewBinaryRank (skewMeld x y).
 Proof with auto.
   intros x y xR yR.
-  unfold preMeld.
+  unfold skewMeld.
   destruct x; destruct y.
   simpl. rewrite meldUniq_equation. auto.
   simpl. rewrite meldUniq_equation.
-  inversion yR; subst.
+  inversion yR; subst. rename t into p.
   edestruct insNoDupe with (n := n) (x := p); eauto.
   eapply posSkew. eapply vanilla.
   destruct H0. eapply H1.
   simpl. rewrite meldUniq_equation.
-  inversion xR; subst.
+  inversion xR; subst. rename t into p.
   edestruct insNoDupe with (n := n) (x := p); eauto.
   eapply posSkew. eapply vanilla.
   destruct H0.
   destruct (ins p x); eauto.
 
-  rename p0 into q.
+  rename t0 into q.
   inversion xR; inversion yR; subst.
   rename n0 into m.
   inversion H; inversion H1;
@@ -3682,10 +3022,10 @@ Proof.
   destruct y as [w j q].
   simpl in *. assert (j = n). eauto. subst.
   destruct q.
-  eapply IHrankN1. Focus 3.
-  eauto. eauto. auto with arith.
-  eapply IHrankN1. Focus 3.
-  eauto. eapply next. eauto.
+  eapply IHrankN1. Focus 4.
+  eauto. auto. eauto. auto with arith.
+  eapply IHrankN1. Focus 4.
+  eauto. auto. eapply next. eauto.
   Focus 2. eauto.
   auto with arith. auto.
   destruct x as [a b c]; destruct z as [d e f].
@@ -3693,6 +3033,7 @@ Proof.
   assert (e = n). eauto; subst.
   subst.
   simpl in H3. destruct c; simpl in *.
+(**)
   inversion H. subst. destruct f; simpl in *.
   inversion H3. subst. clear H3.
   exists m. eauto.
@@ -3717,71 +3058,18 @@ Show Existentials.
   simpl in H3.
   destruct c. assert (n=0). inversion H0. auto.
   subst.
-  eapply IHrankN1. Focus 3. eauto.
+  eapply IHrankN1. Focus 4. eauto. auto.
   eauto. auto with arith.
 
   destruct n. inversion H0.
   
   eapply IHrankN1.
-  Focus 3.
-  eapply H3.
+  Focus 4.
+  eapply H3. auto.
   eapply next. eauto.
   Focus 2. eauto.
   auto. auto.
 Qed.
-
-(*
-Lemma splitPosRank :
-  forall v n c,
-    rankP (Node v n c) ->
-    forall r m, posBinaryRank r m ->
-      n <= m ->
-      forall h t z, (h,t) = split r z c ->
-        exists k, posSkewBinaryRank h k.
-Proof.
-  intros v n c H.
-  unfold rankP in H.
-  simpl in H.
-  dependent induction H; intros.
-  simpl in H1. inversion H1. subst.
-  eauto.
-  simpl in H3.
-  destruct y as [w j q].
-  simpl in *. assert (j = n). eauto. subst.
-  destruct n.
-  eapply IHrankN1. Focus 3.
-  eauto. eauto. auto with arith.
-  eapply IHrankN1. Focus 3.
-  eauto. eapply next. eauto.
-  Focus 2. eauto.
-  auto with arith. auto.
-  destruct x as [a b c]; destruct z as [d e f].
-  assert (b = n). eauto; subst.
-  assert (e = n). eauto; subst.
-  subst.
-  simpl in H3.
-  destruct n.
-  inversion H3; subst. eauto.
-  inversion H3; subst.
-  exists (S n).
-  eapply skew; eauto.
-
-  destruct y as [a b c].
-  assert (b = n). eauto.
-  subst.
-  simpl in H3.
-  destruct n.
-  eapply IHrankN1. Focus 3. eauto.
-  eauto. auto with arith.
-  
-  eapply IHrankN1.
-  Focus 3.
-  eapply H3.
-  eapply next. eauto.
-  Focus 2. eauto.
-  auto. auto.
-Qed.
-*)
 
 Lemma splitRank :
   forall v n c,
@@ -3799,7 +3087,7 @@ Proof.
   assert (b = n); eauto; subst.
   simpl in H1.
   destruct c. inversion H0. subst.
-  eapply IHrankN1. eauto.
+  eapply IHrankN1. auto. eauto.
   destruct n. inversion H0.
   assert (exists k, posSkewBinaryRank h k).
   eapply splitPosRank.
@@ -3827,56 +3115,11 @@ Proof.
   destruct n. inversion H0.
   assert (exists k, posSkewBinaryRank h k).
   eapply splitPosRank.
-  Focus 4. eauto.
+  Focus 4. eauto. 
   Focus 2. eapply last. eauto.
   eauto. auto.
   destruct H2. eauto.
 Qed.
-
-(*
-Lemma splitRank :
-  forall v n c,
-    rankP (Node v n c) ->
-    forall h t z, (h,t) = split ($) z c ->
-      skewBinaryRank h.
-Proof.
-  intros v n c H.
-  unfold rankP in H.
-  simpl in H.
-  dependent induction H; intros.
-  simpl in H. inversion H; subst. eauto.
-  
-  destruct y as [a b c].
-  assert (b = n); eauto; subst.
-  simpl in H1; destruct n.
-  eapply IHrankN1. eauto.
-  assert (exists k, posSkewBinaryRank h k).
-  eapply splitPosRank.
-  Focus 4. eauto.
-  Focus 2. eapply last. eauto.
-  eauto. auto.
-  destruct H2. eauto.
-  
-  destruct x as [a b c]; destruct z as [d e f].
-  assert (b = n); eauto; subst.
-  assert (e = n); eauto; subst.
-  simpl in H1; destruct n.
-  inversion H1; eauto.
-  inversion H1; subst; eauto.
-  
-  simpl in H1.
-  destruct y as [a b c].
-  assert (b = n); eauto; subst.
-  destruct n; simpl in H1.
-  eapply IHrankN1; eauto.
-  assert (exists k, posSkewBinaryRank h k).
-  eapply splitPosRank.
-  Focus 4. eauto.
-  Focus 2. eapply last. eauto.
-  eauto. auto.
-  destruct H2. eauto.
-Qed.
-*)
 
 Lemma getMinBinRank:
   forall x n,
@@ -3894,7 +3137,7 @@ Proof.
   generalize dependent x;
     generalize dependent n.
   induction xs; intros.
-  inversion H. rename p into a.
+  inversion H. rename t into a.
   simpl in H1.
   remember (getMin a xs) as axs.
   destruct axs as [t ts].
@@ -3952,6 +3195,7 @@ Proof.
   simpl.
   intros.
   remember (getMin x0 xs0) as x00; destruct x00.
+  rename t into p.
   remember (pLEQ (root x) (root p)) as xp; destruct xp;
     inversion_clear H5; subst.
   eauto.
@@ -3990,9 +3234,9 @@ Proof.
   inversion H5.
 
   simpl in H0.
-  rename p into a.
+  rename t into a.
   remember (getMin a xs) as axs; destruct axs.
-  remember (pLEQ r (root p)) as ap; destruct ap;
+  remember (pLEQ r (root t)) as ap; destruct ap;
     inversion_clear H0; subst.
   inversion H; subst.
   inversion H0; subst.
@@ -4010,13 +3254,14 @@ Proof.
   eauto.
 Qed.
 
+(*
 Lemma deleteMinRank :
   forall x,
     skewBinaryRank x ->
-    skewBinaryRank (preDeleteMin x).
+    skewBinaryRank (skewDeleteMin x).
 Proof.
   intros x S.
-  unfold preDeleteMin.
+  unfold skewDeleteMin.
   destruct x; eauto.
   remember (getMin p x) as yz. destruct yz as [y z].
   destruct y as [a b c].
@@ -4035,18 +3280,19 @@ Proof.
   simpl.
   apply preInsertRank; auto.
 Qed.
-
+*)
 
 Lemma extractMinRank :
   forall x,
     skewBinaryRank x ->
     forall t u,
-      Some (t,u) = preExtractMin x ->
+      Some (t,u) = skewExtractMin x ->
       skewBinaryRank u.
 Proof.
   intros x S t u T.
-  unfold preExtractMin in *.
+  unfold skewExtractMin in *.
   destruct x; eauto. inversion T.
+  rename t0 into p.
   remember (getMin p x) as yz. destruct yz as [y z].
   destruct y as [a b c].
   remember (split ($) [] c) as rs.
@@ -4056,7 +3302,7 @@ Proof.
   eapply getMinTRank. Focus 2. eauto. auto.
   assert (skewBinaryRank z) as zz.
   eapply getMinQRank. Focus 2. eauto. auto.
-  assert (skewBinaryRank (preMeld z r)).
+  assert (skewBinaryRank (skewMeld z r)).
   eapply preMeldRank; auto.
   inversion_clear T; subst.
   clear Heqrs.
@@ -4065,3 +3311,5 @@ Proof.
   simpl.
   apply preInsertRank; auto.
 Qed.
+End Order.
+End Carrier.
