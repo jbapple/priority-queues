@@ -1,11 +1,16 @@
 COQC=coqc -opt
 
-.PHONY: all
+.PHONY: all extract
 
-all: Inline.vo
+all: Bootstrap.vo
 
-Inline.vo: Inline.v OrderSig.vo PQSig.vo
-	$(COQC) Inline.v
+extract: BootExtract.hs
+
+BootExtract.hs: Extract.v Bootstrap.vo
+	$(COQC) Extract.v
+
+Bootstrap.vo: Bootstrap.v OrderSig.vo PQSig.vo
+	$(COQC) Bootstrap.v 
 
 PQSig.vo: PQSig.v OrderSig.vo
 	$(COQC) PQSig.v
