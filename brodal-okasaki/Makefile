@@ -9,7 +9,7 @@ extract: BootExtract.hs
 BootExtract.hs: Extract.v Bootstrap.vo
 	$(COQC) Extract.v
 
-Bootstrap.vo: Bootstrap.v OrderSig.vo PQSig.vo
+Bootstrap.vo: Bootstrap.v OrderSig.vo PQSig.vo caseTactic.vo
 	$(COQC) Bootstrap.v 
 
 PQSig.vo: PQSig.v OrderSig.vo
