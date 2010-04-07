@@ -1,12 +1,12 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
-module PriorityQ where
+module MeldableHeap where
 
 import qualified BootExtract as B
 
 type PQ = B.BootWrap
 
-class PriorityQ t where
+class MeldableHeap t where
     empty      :: Ord a => t a
     insert     :: Ord a => a -> t a -> t a
     findMin    :: Ord a => t a -> Maybe a
@@ -14,7 +14,7 @@ class PriorityQ t where
     meld       :: Ord a => t a -> t a -> t a
     toList     :: Ord a => t a -> [a]
 
-instance PriorityQ PQ where
+instance MeldableHeap PQ where
     empty      = B.empty      (<=) (B.bootPQ (<=))
     insert     = B.insert     (<=) (B.bootPQ (<=))
     findMin    = B.findMin    (<=) (B.bootPQ (<=))
