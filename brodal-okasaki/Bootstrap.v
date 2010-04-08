@@ -2,13 +2,28 @@ Set Implicit Arguments.
 
 Require Export PQSig.
 Require Export List.
+Require Export Arith.
 
 Section Carrier.
 
 Variable A:Type.
+Variable N:Type.
+Variable zero : N.
+Variable succ : N -> N.
+Variable comp : N -> N -> comparison.
+Variable toNat : N -> nat.
+Variable isoZero : toNat zero = 0.
+Variable isoSucc : forall n, toNat (succ n) = S (toNat n).
+Variable isoComp : forall n m, comp n m = nat_compare (toNat n) (toNat m).
+
+Fixpoint fromNat (x:nat) : N :=
+  match x with
+    | 0 => zero
+    | S y => succ (fromNat y)
+  end.
 
 Inductive Tree :=
-  Node : Root -> nat -> Many -> Tree
+  Node : Root -> N -> Many -> Tree
 with Root :=
   Top : A -> Many -> Root
 with Many :=
@@ -225,8 +240,8 @@ Definition link (x y:Tree) :=
   match x, y with
     | Node v n p, Node w m q =>
       if pLEQ v w 
-        then Node v (S n) (y ::: p)
-        else Node w (S m) (x ::: q)
+        then Node v (succ n) (y ::: p)
+        else Node w (succ m) (x ::: q)
   end.
 
 Definition skewLink (x y z:Tree) :=
@@ -236,18 +251,18 @@ Definition skewLink (x y z:Tree) :=
       Node c k r =>
       if pLEQ a b
         then if pLEQ a c
-          then Node a (S j) [[y | z]]
-          else Node c (S k) (x:::y:::r)
+          then Node a (succ  j) [[y | z]]
+          else Node c (succ  k) (x:::y:::r)
         else if pLEQ b c
-          then Node b (S j) (x:::z:::q)
-          else Node c (S k) (x:::y:::r)
+          then Node b (succ  j) (x:::z:::q)
+          else Node c (succ  k) (x:::y:::r)
   end.
 
 Fixpoint ins t xs :=
   match xs with
     | ($) => [[t]]
     | y:::ys =>
-      match nat_compare (rank t) (rank y) with
+      match comp  (rank t) (rank y) with
         | Lt => t:::xs
         | _ => ins (link t y) ys
       end
@@ -274,7 +289,7 @@ Function meldUniq (xy:Many * Many) {measure combLen xy} : Many :=
     | (($),y) => y
     | (x,($)) => x
     | (p:::ps,q:::qs) => 
-      match nat_compare (rank p) (rank q) with
+      match comp  (rank p) (rank q) with
         | Lt => p ::: meldUniq (ps, q:::qs)
         | Gt => q ::: meldUniq (p:::ps, qs)
         | Eq => ins (link p q) (meldUniq (ps,qs))
@@ -299,10 +314,11 @@ Definition skewEmpty : Many := ($).
 Definition skewInsert x ys :=
   match ys with
     | z1:::z2:::zr =>
-      if beq_nat (rank z1) (rank z2)
-        then skewLink (Node x 0 ($)) z1 z2 ::: zr
-        else Node x 0 ($) ::: ys
-    | _ => Node x 0 ($) ::: ys
+      match comp  (rank z1) (rank z2) with
+        | Eq => skewLink (Node x zero  ($)) z1 z2 ::: zr
+        | _ => Node x zero ($) ::: ys
+      end
+    | _ => Node x zero ($) ::: ys
   end.
 
 Definition skewMeld x y :=
@@ -639,7 +655,7 @@ Lemma skewLinkHeap :
     feapR R x -> 
     feapT T y -> 
     feapT U z -> 
-    feapT (amin R (amin U T)) (skewLink (Node x 0 ($)) y z).
+    feapT (amin R (amin U T)) (skewLink (Node x zero ($)) y z).
 Proof.
   unfold skewLink.
   intros; hisp.
@@ -679,14 +695,14 @@ Lemma preInsertHeapLess :
 Proof.
   intros; destruct ys; hisp.
   destruct ys; hisp.
-  cutThis (beq_nat (rank t) (rank t0)).
+  cutThis (comp (rank t) (rank t0)).
   destruct t; destruct t0; destruct x; hisp.
   cutLEQ; hisp. cutLEQ; hisp.
   cutMin a. cutMin b.
   cutLEQ; hisp. cutMin b.
   cutMin b.
 
-  hisp.
+  hisp. hisp.
 Qed.
 Hint Resolve preInsertHeapLess.
 
@@ -699,7 +715,7 @@ Lemma insHeapSome :
     feapM (amin a b) (ins x xs).
 Proof.
   induction xs; hisp; intros; hisp.
-  cutThis (nat_compare (rank x) (rank t)); hisp.
+  cutThis (comp (rank x) (rank t)); hisp.
   heapCut (amin (amin a b) b).
   unfold oomin. repeat (cutLEQ; hisp).
   inversion Heqab.
@@ -870,7 +886,7 @@ Proof.
 Qed.
 Hint Resolve splitHeap.
 
-Fixpoint Each t (P:t -> Prop) l :=
+Fixpoint Each {t} (P:t -> Prop) l :=
   match l with
     | nil => True
     | x::xs => P x /\ Each P xs
@@ -1985,7 +2001,7 @@ Proof.
   destruct q; simpl; try omega.
   destruct q; simpl; try omega.
   destruct t; destruct t0; simpl.
-  cutThis (beq_nat n n0); hisp;
+  cutThis (comp n n0); hisp;
   destruct p; destruct r; hisp;
   cutLEQ; hisp; destruct r0; hisp; cutLEQ; hisp;
     try omega.
@@ -2121,7 +2137,7 @@ Lemma insCount :
     + countM f x q.
 Proof.
   induction q; intros; lisp.
-  remember (nat_compare (rank p) (rank t)) as pp; 
+  remember (comp  (rank p) (rank t)) as pp; 
     destruct pp; lisp.
   rewrite IHq. rewrite linkCount. omega. auto. auto.
   rewrite IHq. rewrite linkCount. omega. auto. auto.
@@ -2135,7 +2151,7 @@ Proof.
   induction y; intros; lisp;
     unfold not; intros; auto.
   unfold ins in H. inversion H.
-  destruct (nat_compare (rank x) (rank t)).
+  cutThis (comp  (rank x) (rank t)).
   eapply IHy; eauto.
   inversion H.
   eapply IHy; eauto.
@@ -2188,7 +2204,7 @@ Proof.
   apply insCons in Heqpp. inversion Heqpp.
   remember (ins t0 inq) as qq; destruct qq.
   apply insCons in Heqqq. inversion Heqqq.
-  destruct (nat_compare (rank t1) (rank t2)).
+  cutThis (comp  (rank t1) (rank t2)).
   rewrite insCount; auto. rewrite linkCount; auto. 
   rewrite meldUniqCount; auto.
   rewrite <- insCount; auto. rewrite <- insCount; auto.
@@ -2327,6 +2343,10 @@ Proof.
   destruct r; lisp.
   intros.
   unfold count; lisp.
+  eauto.
+  Print ex.
+  eapply ex_intro. split. eauto.
+(*
   exists (       exist (fun x0 : bootWrap => wrapHeap x0)
          match skewExtractMin m with
          | Some (pair (Top w d) cs) => Full (Top w (skewMeld d cs))
@@ -2392,7 +2412,8 @@ Proof.
                end Heqmm0) Heqmm
           | None => fun _ : None = skewExtractMin m => I
           end eq_refl)).
-  auto. split; auto.
+*)
+
  
   destruct same; lisp. intros.
   remember (x0 y a) as xya; destruct xya; lisp.
@@ -2468,6 +2489,1435 @@ Recursive Extraction empty.
 
 
 Hint Unfold check.
+
+
+Inductive TreeN :=
+  NodeN : RootN -> nat -> ManyN -> TreeN
+with RootN :=
+  TopN : A -> ManyN -> RootN
+with ManyN :=
+  CilN : ManyN
+| NonsN : TreeN -> ManyN -> ManyN.
+
+Fixpoint toNatT x :=
+  match x with
+    | Node a b c => NodeN (toNatR a) (toNat b) (toNatM c)
+  end
+with toNatR x :=
+  match x with
+    | Top a b => TopN a (toNatM b)
+  end
+with toNatM x :=
+  match x with
+    | Cil => CilN
+    | Nons a b => NonsN (toNatT a) (toNatM b)
+  end.
+
+Fixpoint fromNatT x :=
+  match x with
+    | NodeN a b c => Node (fromNatR a) (fromNat b) (fromNatM c)
+  end
+with fromNatR x :=
+  match x with
+    | TopN a b => Top a (fromNatM b)
+  end
+with fromNatM x :=
+  match x with
+    | CilN => Cil
+    | NonsN a b => Nons (fromNatT a) (fromNatM b)
+  end.
+
+Scheme treen_w := Induction for TreeN Sort Prop
+with rootn_w := Induction for RootN Sort Prop
+with mln_w := Induction for ManyN Sort Prop.
+
+Combined Scheme alln_ind from treen_w, rootn_w, mln_w.
+
+Notation "[[[ x | .. | y ]]]" := (NonsN x .. (NonsN y CilN) ..).
+Notation "a :::: b" := (NonsN a b) (at level 60, right associativity).
+Notation "$$" := CilN (at level 60).
+
+Definition rankn (x:TreeN) :=
+  match x with
+    | NodeN _ r _ => r
+  end.
+
+
+Inductive rankNN : TreeN -> nat -> Prop :=
+  singleton : forall x, rankNN (NodeN x 0 ($$)) 0
+| simple : forall n v p y,
+             rankNN (NodeN v n p) n ->
+             rankNN y n ->
+             rankNN (NodeN v (S n) (y::::p)) (S n)
+| skewA : forall n x y z,
+          rankNN x n ->
+          rankNN z n ->
+          rankNN (NodeN y (S n) [[[x|z]]]) (S n)
+| skewB : forall n x v p y,
+          rankNN (NodeN v n p) n ->
+          rankNN y n ->
+          rankNN (NodeN v (S n) ((NodeN x 0 ($$))::::y::::p)) (S n).
+Hint Constructors rankNN.
+
+Definition rankN x n := rankNN (toNatT x) n.
+Hint Unfold rankN.
+
+Definition rankPN x := rankNN x (rankn x).
+
+Definition rankP x := rankPN (toNatT x).
+Hint Unfold rankP.
+
+Inductive posBinaryRankN : ManyN -> nat -> Prop :=
+  last : forall x n,
+         rankNN x n ->
+         posBinaryRankN [[[x]]] n
+| next : forall x n m xs,
+         rankNN x n ->
+         n < m ->
+         posBinaryRankN xs m ->
+         posBinaryRankN (x::::xs) n.
+Hint Constructors posBinaryRankN.
+
+(*
+Scheme pbr_min := Minimality for posBinaryRankN Sort Prop.
+Check pbr_min.
+Check posBinaryRankN_ind.
+*)
+
+Definition posBinaryRank x n := posBinaryRankN (toNatM x) n.
+Hint Unfold posBinaryRank.
+
+Inductive binaryRankN : ManyN -> Prop :=
+  zeroBin : binaryRankN ($$)
+| posBin : forall n xs,
+           posBinaryRankN xs n ->
+           binaryRankN xs.
+Hint Constructors binaryRankN.
+
+Definition binaryRank x := binaryRankN (toNatM x).
+Hint Unfold binaryRank.
+
+Inductive posSkewBinaryRankN : ManyN -> nat -> Prop :=
+  vanilla : forall xs n, 
+            posBinaryRankN xs n ->
+            posSkewBinaryRankN xs n
+| skew : forall x n xs,
+         rankNN x n ->
+         posBinaryRankN xs n ->
+         posSkewBinaryRankN (x::::xs) n.
+Hint Constructors posSkewBinaryRankN.
+
+Definition posSkewBinaryRank x n := posSkewBinaryRankN (toNatM x) n.
+Hint Unfold posSkewBinaryRank.
+
+Inductive skewBinaryRankN : ManyN -> Prop :=
+  zeroSkew : skewBinaryRankN ($$)
+| posSkew : forall n xs,
+           posSkewBinaryRankN xs n ->
+           skewBinaryRankN xs.
+Hint Constructors skewBinaryRankN.
+
+Definition skewBinaryRank x := skewBinaryRankN (toNatM x).
+Hint Unfold skewBinaryRank.
+
+
+Lemma rankDestruct :
+  forall v n c m,
+    rankN (Node v n c) m ->
+    toNat n = m.
+Proof.
+  intros v n c m r.
+  inversion r; subst; auto.
+Qed.
+Hint Resolve rankDestruct.
+
+
+Lemma rankDestruct2 :
+  forall v n c m,
+    rankNN (NodeN v n c) m ->
+    n = m.
+Proof.
+  intros v n c m r.
+  inversion r; subst; auto.
+Qed.
+Hint Resolve rankDestruct2.
+
+Lemma rankRank :
+  forall x n,
+    rankN x n ->
+    toNat (rank x) = n.
+Proof.
+  intros x n r. destruct x; simpl in *.
+  inversion r; subst; auto.
+Qed.
+Hint Resolve rankRank.
+
+Lemma rankFunction :
+  forall x n m,
+    rankN x n ->
+    rankN x m -> 
+    n = m.
+Proof.
+  intros x n m XN XM;
+    destruct x as [v i p].
+  assert (toNat i = n). eapply rankDestruct; eauto. subst.
+  eapply rankDestruct; eauto.
+Qed.
+
+Ltac tra0 :=
+  match goal with 
+    | [H : context[toNat (succ ?x)] |- _]
+      => rewrite isoSucc in H; tra0
+    | [|- context [toNat (succ ?x)] ]
+      => rewrite isoSucc; tra0        
+    | [H : context[rankN (Node _ _ _) _] |- _]
+      => unfold rankN in H; simpl in H; tra0
+    | [|- context[rankN (Node _ _ _) _] ]
+      => unfold rankN; simpl; tra0
+    | [H : context[posBinaryRank (Node _ _ _) _] |- _]
+      => unfold posBinaryRank in H; simpl in H; tra0
+    | [|- context[posBinaryRank (Node _ _ _) _] ]
+      => unfold posBinaryRank; simpl; tra0
+    | _ => auto
+  end.
+
+Lemma linkRank :
+  forall n x y, 
+    rankN x n -> 
+    rankN y n -> 
+    rankN (link x y) (S n).
+Proof.
+  intros n x y X Y.
+  unfold link.
+  destruct x as [v xn p]; destruct y as [w yn q].
+  assert (toNat xn = n); try (eapply rankDestruct; eauto); subst.
+  assert (toNat yn = toNat xn); try (eapply rankDestruct; eauto); subst.
+  remember (pLEQ v w) as vw; destruct vw; simpl in *; tra0.
+  rewrite H. apply simple; auto.
+  rewrite H in Y. auto.
+Qed.
+Hint Resolve linkRank.
+
+Lemma skewLinkRank :
+  forall n x y z,
+    rankN x 0 ->
+    rankN y n ->
+    rankN z n ->
+    rankN (skewLink x y z) (S n).
+Proof.
+  intros n x y z X Y Z.
+  unfold skewLink.
+  destruct x as [a i p]; destruct y as [b j q]; destruct z as [c k r].
+  tra0.
+  assert (toNat i = 0); try (eapply rankDestruct; eauto); subst.
+  assert (toNat j = n); try (eapply rankDestruct; eauto); subst.
+  assert (toNat k = toNat j); try (eapply rankDestruct; eauto); subst.
+  assert (p = ($)).  inversion X; subst.
+  destruct p; simpl in *; auto. inversion H4. subst.
+  unfold toNatM in X; simpl in X.
+  hisp. destruct a; destruct b; destruct c.
+  rewrite H0 in Z.
+  cutLEQ; cutLEQ; tra0; rewrite H0; subst.
+  apply skewA; auto.
+  rewrite H. apply skewB; auto.
+  rewrite H. apply skewB; auto.
+  rewrite H. apply skewB; auto.
+Qed.
+Hint Resolve skewLinkRank.
+
+Lemma eq_nat_compare :
+  forall x, nat_compare x x = Eq.
+Proof.
+  induction x; simpl; auto.
+Qed.
+
+(*
+Lemma insNoDupeHelp : 
+  forall n m x xs, 
+    rankN x n ->
+    posBinaryRank xs m ->
+    n <= m ->
+    exists k, k >= n /\ posBinaryRank (ins x xs) k.
+Proof.
+  intros n m x xs.
+  generalize dependent x;
+    generalize dependent n;
+      generalize dependent m.
+  dependent induction xs; intros; hisp; tra0.
+  Case "($)".
+    unfold posBinaryRank in H0.
+    unfold toNatM in H0. inversion H0.
+  Case "t::xs".
+    unfold posBinaryRank in H0.
+    simpl in H0.
+    inversion H0.
+    SCase "last".
+       subst.
+       destruct xs. 
+       SSCase "xs = ($)".
+         simpl.
+         destruct x; destruct t; hisp. tra0.
+         assert (toNat n1 = m). eapply rankDestruct2; eauto.
+         rewrite H2 in H5.
+         assert (toNat n0 = n). eapply rankDestruct; eauto.
+         rewrite H3 in H.
+         destruct r; hisp. destruct r0; hisp.
+         cutThis (comp n0 n1).
+         SSSCase "n0 = n1".
+           rewrite isoComp in HeqH6.
+           symmetry in HeqH6.
+           apply nat_compare_eq in HeqH6.
+           cutLEQ.
+           S4Case "a <= a0".
+             exists (S (toNat n0)); hisp. omega.
+             unfold posBinaryRank. simpl.
+             apply last. tra0.
+             apply simple.
+             rewrite H3; auto.
+             rewrite <- H2 in H5. 
+             rewrite HeqH6. auto.
+           S4Case "a < a0".
+             exists (S (toNat n1)); hisp. omega.
+             unfold posBinaryRank. simpl.
+             apply last. tra0.
+             apply simple.
+             rewrite H2; auto.
+             rewrite <- H3 in H.
+             rewrite <- HeqH6. auto.
+         SSSCase "n0 < n1".
+           rewrite isoComp in HeqH6.
+           symmetry in HeqH6.
+           apply nat_compare_lt in HeqH6.
+           exists n; hisp.
+           unfold posBinaryRank; simpl.
+           eapply next.
+           rewrite H3; auto. Focus 2.
+           rewrite H2. eauto. omega.
+         SSSCase "n0 > n1".
+           rewrite isoComp in HeqH6.
+           symmetry in HeqH6.
+           apply nat_compare_gt in HeqH6.
+           assert False as f. omega. inversion f.
+       SSCase "xs = t0 ::: xs".
+         simpl in *. inversion H4.
+     SCase "next".
+       subst.
+       destruct xs.
+       SSCase "xs = ($)".
+         simpl in *.
+         inversion H7.
+       SSCase "xs = t0 ::: xs".
+         simpl in *.
+         
+           cutLEQ.
+           S4Case "a <= a0".
+             exists (S (toNat n0)); hisp. omega.
+             unfold posBinaryRank. simpl.
+             apply last. tra0.
+             apply simple.
+             rewrite H3; auto.
+             rewrite <- H2 in H5. 
+             rewrite HeqH6. auto.
+           S4Case "a < a0".
+             exists (S (toNat n1)); hisp. omega.
+             unfold posBinaryRank. simpl.
+             apply last. tra0.
+             apply simple.
+             rewrite H2; auto.
+             rewrite <- H3 in H.
+             rewrite <- HeqH6. auto.
+
+           apply last; hisp.
+
+
+             exists (S (toNat n1)); hisp. omega.
+             unfold posBinaryRank. simpl.
+             apply last. tra0.
+             apply simple.
+             assert (toNat n1 = m). eapply rankDestruct2; eauto.
+             rewrite H3 in H5. rewrite H3; auto.
+             rewrite HeqH3. auto.
+
+
+             rewrite <- HeqH3. rewrite H2. auto.
+             tra0.
+             auto.
+             apply 
+    unfold toNatM in H0. simpl in H0.
+
+    SCase "next".
+    
+  
+  unfold posBinaryRank in xsm.
+  dependent induction xsm.
+  Case "last".
+    intros j jn y yj.
+    destruct x0 as [v xx p]. tra0.  
+    assert (xx = n). eapply rankDestruct2; eauto. subst.
+    destruct y as [w yy q]. 
+    assert (toNat yy = j). eapply rankDestruct; eauto. subst.
+    unfold ins.
+    unfold rank. remember (toNat yy) as j.
+    remember (nat_compare j n) as ncjn; destruct ncjn.
+    SCase "j = n".
+      assert (j = n). apply nat_compare_eq; auto. subst.
+      exists (S n). split.
+      auto.
+      induction xs; simpl in *. inversion x.
+      destruct t; simpl.
+      simpl in x.
+      inversion x; subst.
+      rewrite isoComp.
+      rewrite H3.
+      rewrite eq_nat_compare.
+      hisp. destruct w; destruct r; hisp.
+      cutLEQ. simpl.
+      Check nat_compare_eq.
+      rewrite <- nat_compare_eq.
+simpl.
+
+simpl. fold (ins (Node w yy q) xs).
+
+  tra0. 
+
+constructor. apply linkRank; auto.
+    SCase "j < n".
+      assert (j < n) as jn2. apply nat_compare_lt; auto.
+      exists j. 
+      split. auto.
+      eapply next; eauto.
+    SCase "j > n".
+      assert (j > n) as jn2. apply nat_compare_gt; auto.
+      assert False as f. omega. inversion f.
+  Case "next".
+    intros j jn y yj.
+    destruct x as [v xx p]. 
+    assert (xx = n). eapply rankDestruct; eauto. subst.
+    destruct y as [w yy q]. 
+    assert (yy = j). eapply rankDestruct; eauto. subst.
+    unfold ins.
+    unfold rank at 1. unfold rank at 1.
+    remember (nat_compare j n) as ncjn; destruct ncjn.
+    SCase "j = n".
+      assert (j = n). apply nat_compare_eq; auto. subst.
+      fold ins.
+      assert (exists k, k >= S n 
+        /\ posBinaryRank (ins (link (Node w n q) (Node v n p)) xs) k).
+      eapply IHxsm.
+      auto. auto.
+      destruct H1.
+      destruct H1.
+      exists x.
+      split. auto with arith.
+      auto.
+    SCase "j < n".
+      assert (j < n) as jn2. apply nat_compare_lt; auto.
+      exists j. 
+      split; auto.
+      eapply next; eauto.
+    SCase "j > n".
+      assert (j > n) as jn2. apply nat_compare_gt; auto.
+      assert False as f. omega. inversion f.
+Qed.
+*)
+
+(*
+Lemma insNoDupeHelp : 
+  forall n m x xs, 
+    rankN x n ->
+    posBinaryRank xs m ->
+    n <= m ->
+    exists k, k >= n /\ posBinaryRank (ins x xs) k.
+Proof.
+  intros n m x xs xn xsm nm.
+  generalize dependent x;
+    generalize dependent n. 
+  unfold posBinaryRank in xsm.
+  generalize dependent isoZero. clear isoZero.
+  generalize dependent isoSucc. clear isoSucc.
+  generalize dependent isoComp. clear isoComp.
+  generalize dependent zero. clear zero.
+  dependent induction xsm.
+  Case "last".
+    clear toNat0 comp0 succ0.
+    intros zero isoComp isoSucc isoZero.
+    destruct xs; simpl in *. inversion x.
+    inversion x; subst. assert (xs = ($)).
+    induction xs; auto.
+    inversion x; subst. subst. clear x. clear H2.
+    intros j jn y yj.
+    destruct t as [v xx p]. tra0. hisp.
+
+    assert (toNat xx = n). 
+    eapply rankDestruct; eauto.
+(* Or: 
+
+   apply rankDestruct2 with (v := toNatR v) (c := toNatM p).
+    exact H.*)
+    destruct y as [w yy q]. 
+    assert (toNat yy = j). eapply rankDestruct; eauto. subst.
+    simpl.
+    cutThis (comp yy xx).
+    SCase "yy = xx".
+      rewrite isoComp in HeqH0. symmetry in HeqH0.
+      apply nat_compare_eq in HeqH0. clear jn.
+      exists (S (toNat yy)); hisp.
+      destruct w; destruct v.
+      cutLEQ.
+      SSCase "a <= a0".
+        tra0. unfold posBinaryRank. simpl.
+        constructor. tra0.
+        apply simple; auto.
+        rewrite HeqH0; auto.
+      SSCase "a0 < a".
+        tra0. unfold posBinaryRank. simpl.
+        constructor. tra0. rewrite HeqH0.
+        apply simple; auto.
+        rewrite <- HeqH0; auto.
+    SCase "yy < xx".
+      rewrite isoComp in HeqH0. symmetry in HeqH0.
+      apply nat_compare_lt in HeqH0. clear jn.
+      exists (toNat yy); hisp.
+      unfold posBinaryRank. simpl.
+      eapply next. tra0. Focus 2.
+      apply last. eauto. auto.
+    SCase "yy > xx".
+      rewrite isoComp in HeqH0. symmetry in HeqH0.
+      apply nat_compare_gt in HeqH0. 
+      assert False as f. omega. inversion f.
+
+  Case "next".
+    clear succ0 comp0 toNat0 O0.
+    intros zero isoComp isoSucc isoZero.
+
+    destruct xs; simpl in *. inversion x.
+    inversion x; subst. 
+    assert (forall n : nat,
+      n <= m ->
+      forall x : Tree,
+        rankN x n -> exists k : nat, k >= n /\ posBinaryRank (ins x xs) k) 
+    as IH.
+    exact (IHxsm xs O toNat comp succ eq_refl zero isoComp isoSucc isoZero).
+    clear IHxsm.
+    clear x.
+    intros; hisp; tra0.
+    destruct x; destruct t; hisp.
+    assert (toNat n1 = n0). eapply rankDestruct; eauto.
+    tra0. rewrite H1 in xn.
+    assert (toNat n2 = n). eapply rankDestruct; eauto.
+    tra0. rewrite H2 in H.
+    destruct r; destruct r0; hisp.
+    cutThis (comp n1 n2).
+    SCase "n1 = n2".
+      rewrite isoComp in HeqH3. symmetry in HeqH3.
+      apply nat_compare_eq in HeqH3.
+      cutLEQ.
+      SSCase "a <= a0".
+
+        unfold posBinaryRank; simpl.
+        edestruct IH with 
+        (x := Node (Top a m2) (succ n1) (Node (Top a0 m3) n2 m1 ::: m0))
+        (n := S (toNat n1)).
+        omega. tra0.
+        apply simple; auto.
+        rewrite H1; auto.
+        rewrite HeqH3.
+        rewrite H2; auto.
+        hisp.
+        unfold posBinaryRank in H4.
+        exists x; hisp. omega.
+      SSCase "a > a0".
+        unfold posBinaryRank; simpl.
+        edestruct IH with 
+        (x := Node (Top a0 m3) (succ n2) (Node (Top a m2) n1 m0 ::: m1))
+        (n := S (toNat n2)).
+        omega. tra0.
+        apply simple; auto.
+        rewrite H2; auto.
+        rewrite <- HeqH3.
+        rewrite H1; auto.
+        hisp.
+        unfold posBinaryRank in H4.
+        exists x; hisp. omega.
+    SCase "n1 < n2".
+      rewrite isoComp in HeqH3. symmetry in HeqH3.
+      apply nat_compare_lt in HeqH3.
+      exists (toNat n1); hisp.
+      omega.
+      unfold posBinaryRank. simpl.
+      eapply next.
+      rewrite H1; auto. Focus 2.
+      rewrite H2. eauto.
+      rewrite <- H2. auto.
+    SCase "n2 < n1".
+      rewrite isoComp in HeqH3. symmetry in HeqH3.
+      apply nat_compare_gt in HeqH3.
+      assert False as f. omega. inversion f.
+Qed.
+*)
+
+Lemma insNoDupeHelp : 
+  forall n m x xs, 
+    rankN x n ->
+    posBinaryRank xs m ->
+    n <= m ->
+    exists k, k >= n /\ posBinaryRank (ins x xs) k.
+Proof.
+  intros n m x xs xn xsm nm.
+  generalize dependent x;
+    generalize dependent n. 
+  unfold posBinaryRank in xsm. (*
+  generalize dependent isoZero. clear isoZero.
+  generalize dependent isoSucc. clear isoSucc.
+  generalize dependent isoComp. clear isoComp.
+  generalize dependent zero. clear zero.*)
+  dependent induction xsm generalizing xs.
+  Case "last".
+(*    clear toNat0 comp0 succ0.
+    intros zero isoComp isoSucc isoZero.*)
+    destruct xs; simpl in *. inversion x.
+    inversion x; subst. assert (xs = ($)).
+    induction xs; auto.
+    inversion x; subst. subst. clear x. clear H2.
+    intros j jn y yj.
+    destruct t as [v xx p]. tra0. hisp.
+
+    assert (toNat xx = n). eapply rankDestruct; eauto.
+(*    apply rankDestruct2 with (v := toNatR v) (c := toNatM p).
+    exact H.*)
+    destruct y as [w yy q]. 
+    assert (toNat yy = j). eapply rankDestruct; eauto. subst.
+    simpl.
+    cutThis (comp yy xx).
+    SCase "yy = xx".
+      rewrite isoComp in HeqH0. symmetry in HeqH0.
+      apply nat_compare_eq in HeqH0. clear jn.
+      exists (S (toNat yy)); hisp.
+      destruct w; destruct v.
+      cutLEQ.
+      SSCase "a <= a0".
+        tra0. unfold posBinaryRank. simpl.
+        constructor. tra0.
+        apply simple; auto.
+        rewrite HeqH0; auto.
+      SSCase "a0 < a".
+        tra0. unfold posBinaryRank. simpl.
+        constructor. tra0. rewrite HeqH0.
+        apply simple; auto.
+        rewrite <- HeqH0; auto.
+    SCase "yy < xx".
+      rewrite isoComp in HeqH0. symmetry in HeqH0.
+      apply nat_compare_lt in HeqH0. clear jn.
+      exists (toNat yy); hisp.
+      unfold posBinaryRank. simpl.
+      eapply next. tra0. Focus 2.
+      apply last. eauto. auto.
+    SCase "yy > xx".
+      rewrite isoComp in HeqH0. symmetry in HeqH0.
+      apply nat_compare_gt in HeqH0. 
+      assert False as f. omega. inversion f.
+
+  Case "next". (*
+    clear succ0 comp0 toNat0 O0.
+    intros zero isoComp isoSucc isoZero.
+*)
+    destruct xs; simpl in *. inversion x.
+    inversion x; subst. 
+    assert (forall n : nat,
+      n <= m ->
+      forall x : Tree,
+        rankN x n -> exists k : nat, k >= n /\ posBinaryRank (ins x xs) k) 
+    as IH.
+    exact (IHxsm xs eq_refl).
+    clear IHxsm.
+    clear x.
+    intros; hisp; tra0.
+    destruct x; destruct t; hisp.
+    assert (toNat n1 = n0). eapply rankDestruct; eauto.
+    tra0. rewrite H1 in xn.
+    assert (toNat n2 = n). eapply rankDestruct; eauto.
+    tra0. rewrite H2 in H.
+    destruct r; destruct r0; hisp.
+    cutThis (comp n1 n2).
+    SCase "n1 = n2".
+      rewrite isoComp in HeqH3. symmetry in HeqH3.
+      apply nat_compare_eq in HeqH3.
+      cutLEQ.
+      SSCase "a <= a0".
+
+        unfold posBinaryRank; simpl.
+        edestruct IH with 
+        (x := Node (Top a m2) (succ n1) (Node (Top a0 m3) n2 m1 ::: m0))
+        (n := S (toNat n1)).
+        omega. tra0.
+        apply simple; auto.
+        rewrite H1; auto.
+        rewrite HeqH3.
+        rewrite H2; auto.
+        hisp.
+        unfold posBinaryRank in H4.
+        exists x; hisp. omega.
+      SSCase "a > a0".
+        unfold posBinaryRank; simpl.
+        edestruct IH with 
+        (x := Node (Top a0 m3) (succ n2) (Node (Top a m2) n1 m0 ::: m1))
+        (n := S (toNat n2)).
+        omega. tra0.
+        apply simple; auto.
+        rewrite H2; auto.
+        rewrite <- HeqH3.
+        rewrite H1; auto.
+        hisp.
+        unfold posBinaryRank in H4.
+        exists x; hisp. omega.
+    SCase "n1 < n2".
+      rewrite isoComp in HeqH3. symmetry in HeqH3.
+      apply nat_compare_lt in HeqH3.
+      exists (toNat n1); hisp.
+      omega.
+      unfold posBinaryRank. simpl.
+      eapply next.
+      rewrite H1; auto. Focus 2.
+      rewrite H2. eauto.
+      rewrite <- H2. auto.
+    SCase "n2 < n1".
+      rewrite isoComp in HeqH3. symmetry in HeqH3.
+      apply nat_compare_gt in HeqH3.
+      assert False as f. omega. inversion f.
+Qed.
+
+Lemma insNoDupe : 
+  forall n x xs, 
+    posSkewBinaryRank (x:::xs) n ->
+    exists k, k >= n /\ posBinaryRank (ins x xs) k.
+Proof.
+  intros n x xs xxsn.
+  inversion xxsn; subst.
+  Case "vanilla".
+    destruct xs.
+    SCase "xs = nil".
+      eauto.
+    SCase "xs = p ::: _".
+      simpl. rename t into p.
+      assert (comp (rank x) (rank p) = Lt).
+      destruct x; destruct p; simpl.
+      inversion H; subst.
+      inversion H5; subst.
+      assert (toNat n0 = n). eapply rankDestruct; eauto.
+      subst.
+      assert (toNat n1 = m1). eapply rankDestruct; eauto.
+      subst.
+      rewrite isoComp.
+      apply nat_compare_lt; auto.
+      assert (toNat n0 = n). eapply rankDestruct; eauto.
+      subst.
+      assert (toNat n1 = m1). eapply rankDestruct; eauto.
+      subst. rewrite isoComp.
+      apply nat_compare_lt; auto.
+      rewrite H0.
+      eauto.
+  Case "skew".
+    rename H1 into xn.
+    rename H3 into xsn.
+    eapply insNoDupeHelp; eauto.
+Qed.
+
+Lemma preInsertRank :
+  forall x ys,
+    skewBinaryRank ys ->
+    skewBinaryRank (skewInsert x ys).
+Proof with auto.
+  intros x ys P.
+  destruct ys.
+  Case "ys = ($)".
+    simpl.
+    SCase "skewBinaryRank [Node x 0 ($)]".
+      eapply posSkew.
+      eapply vanilla.
+      eapply last. rewrite isoZero.
+      apply singleton.
+  Case "ys = p ::: _".
+    unfold skewInsert.
+    destruct ys.
+    SCase "ys = nil".
+      rename P into R.
+      SSCase "skewBinaryRank [Node x 0 ($); p]".
+        eapply posSkew.
+        inversion R as [|n xs P]; subst.
+        inversion P; subst.
+        SSSCase "".
+          destruct n.
+          eapply skew; eauto. rewrite isoZero. constructor.
+          constructor.
+          eapply next. rewrite isoZero. constructor.
+          Focus 2. eauto.
+          auto with arith.
+        SSSCase "impossible".
+          inversion H3.
+    SCase "ys = p0 ::: _".
+      rename t0 into q.
+      rename P into R. rename t into p.
+      remember (comp (rank p) (rank q)) as pq; destruct pq.
+      SSCase "rank p = rank q".
+        assert (toNat (rank p) = toNat (rank q)) as pq. 
+        rewrite isoComp in Heqpq.
+        apply nat_compare_eq; auto.
+        SSSCase "skewBinaryRank (skewLink (Node x 0 ($)) p q ::: ys".
+          eapply posSkew.
+          inversion R; subst.
+          inversion H; subst.
+          assert (toNat (rank p) = n).
+          inversion H0; auto; eapply rankRank; auto.
+          subst.
+          assert (toNat (rank p) < toNat (rank q)).
+          inversion H0; subst.
+          assert (toNat (rank q) = m).
+          inversion H6; auto; eapply rankRank; auto.
+          subst. auto.
+          assert False as f. omega. inversion f.
+
+          instantiate (1 := S (toNat (rank p))).
+          assert (toNat (rank p) = n).
+          eapply rankRank; auto.
+          subst.
+          inversion H4; subst.
+          eapply vanilla; auto.
+          destruct ys; subst; auto.
+          apply last. apply skewLinkRank; auto.
+          tra0. rewrite isoZero. auto.
+          simpl in H3. inversion H3.
+
+          inversion H5; subst.
+          eapply skew; auto.
+          apply skewLinkRank; auto.
+          tra0. rewrite isoZero. auto.
+          
+          eapply vanilla; auto.
+          apply next with (m := S m0).
+          apply skewLinkRank; auto.
+          tra0. rewrite isoZero. auto.
+          omega. auto.
+      SSCase "rank p <> rank q".
+        assert (toNat (rank p) <> toNat (rank q)) as pq. 
+        rewrite isoComp in Heqpq.
+        symmetry in Heqpq.
+        apply nat_compare_lt in Heqpq. omega.
+        apply posSkew with (n := 0).
+        inversion R; subst.
+        destruct n.
+        SSSCase "skew".
+          simpl.
+          apply skew.
+          rewrite isoZero. constructor.
+          simpl in H.
+          inversion H; subst.
+          auto.
+          assert (toNat (rank p) = 0). apply rankRank; auto.
+          assert (toNat (rank q) = 0).
+          inversion H4; subst; apply rankRank; auto.
+          assert False as f. omega. inversion f.
+
+       SSSCase "vanilla".
+         simpl.
+         apply vanilla.
+         apply next with (m := S n). rewrite isoZero.
+         constructor. omega.
+         simpl in H.
+         inversion H; subst.
+         auto.
+         assert (toNat (rank p) = S n). apply rankRank; auto.
+         assert (toNat (rank q) = S n).
+         inversion H4; subst;
+         apply rankRank; auto.
+         assert False as f. omega. inversion f.
+      SSCase "rank p <> rank q".
+        assert (toNat (rank p) <> toNat (rank q)) as pq. 
+        rewrite isoComp in Heqpq.
+        symmetry in Heqpq.
+        apply nat_compare_gt in Heqpq. omega.
+        apply posSkew with (n := 0).
+        inversion R; subst.
+        destruct n.
+        SSSCase "skew".
+          simpl.
+          apply skew.
+          rewrite isoZero. constructor.
+          simpl in H.
+          inversion H; subst.
+          auto.
+          assert (toNat (rank p) = 0). apply rankRank; auto.
+          assert (toNat (rank q) = 0).
+          inversion H4; subst; apply rankRank; auto.
+          assert False as f. omega. inversion f.
+
+       SSSCase "vanilla".
+         simpl.
+         apply vanilla.
+         apply next with (m := S n). rewrite isoZero.
+         constructor. omega.
+         simpl in H.
+         inversion H; subst.
+         auto.
+         assert (toNat (rank p) = S n). apply rankRank; auto.
+         assert (toNat (rank q) = S n).
+         inversion H4; subst;
+         apply rankRank; auto.
+         assert False as f. omega. inversion f.
+Qed. 
+
+Definition min x y :=
+  match nat_compare x y with
+    | Lt => x
+    | _ => y
+  end.
+
+Lemma meldUniqRank :
+  forall x n y m,
+    posBinaryRank x n ->
+    posBinaryRank y m ->
+    exists k, k >= min n m
+      /\ posBinaryRank (meldUniq (x,y)) k.
+Proof with auto.
+  assert 
+    (let P := 
+      fun (xy:(Many*Many)) r =>
+        let (x,y) := xy in
+          forall n m,
+            posBinaryRank x n ->
+            posBinaryRank y m ->
+            exists k, k >= min n m
+              /\ posBinaryRank r k
+            in forall xy, P xy (meldUniq xy)).
+  eapply meldUniq_ind; intros; auto.
+
+  inversion H.
+  inversion H0.
+  assert (toNat (rank p) = n). inversion H0; apply rankRank; auto.
+  assert (toNat (rank q) = m). inversion H1; apply rankRank; auto.
+  subst.
+  rewrite isoComp in e0.
+  assert (toNat (rank p) < toNat (rank q)). apply nat_compare_lt; auto.
+  inversion H0; subst. destruct ps.
+  unfold min. rewrite e0.
+  exists (toNat (rank p)); split; auto.
+  simpl. unfold posBinaryRank. simpl.
+  rewrite meldUniq_equation; fold toNatM.
+  Check meldUniq_equation.
+  eapply next.
+  Focus 2. 
+  eauto. auto. auto. simpl in H5. inversion H5.
+  unfold min. rewrite e0. 
+  exists (toNat (rank p)); split; auto.
+  assert (exists k, k >= min m (toNat (rank q))
+    /\ posBinaryRank (meldUniq (ps, q:::qs)) k).
+  apply H; auto.
+  destruct H3.
+  destruct H3. unfold posBinaryRank. simpl.
+  eapply next.
+  Focus 3.
+  eauto. eauto.
+  unfold min in H3.
+  remember (nat_compare m (toNat (rank q))) as mq; destruct mq; omega.
+  
+  assert (toNat (rank p) = n). inversion H0; apply rankRank; auto.
+  assert (toNat (rank q) = m). inversion H1; apply rankRank; auto.
+  subst.
+  assert (toNat (rank q) < toNat (rank p)).
+  rewrite isoComp in e0.
+  apply nat_compare_gt; auto.
+  inversion H1; subst.
+  destruct qs.
+  unfold min. rewrite <- isoComp.
+  rewrite e0.
+  exists (toNat (rank q)); split; auto.
+  rewrite meldUniq_equation.  unfold posBinaryRank. simpl.
+  eapply next.
+  Focus 3.
+  eauto. auto. auto. simpl in H5. inversion H5.
+  unfold min. rewrite <- isoComp.
+  rewrite e0. 
+  exists (toNat (rank q)); split; auto.
+  assert (exists k, k >= min (toNat (rank p)) m
+    /\ posBinaryRank (meldUniq (p:::ps, qs)) k).
+  apply H; auto.
+  destruct H3.
+  destruct H3. unfold posBinaryRank. simpl.
+  eapply next.
+  Focus 3.
+  eauto. eauto.
+  unfold min in H3.
+  remember (nat_compare (toNat (rank p)) m) as mq; destruct mq; omega.
+
+  assert (toNat (rank p) = toNat (rank q)). apply nat_compare_eq; auto.
+  rewrite <- isoComp; auto.
+  assert (exists k : nat,
+    k >= S (min n m)
+    /\ posBinaryRank (ins (link p q) (meldUniq (ps, qs))) k).
+  apply insNoDupe.
+  unfold posSkewBinaryRank. simpl.
+  inversion H0; inversion H1; subst.
+  destruct ps; destruct qs.
+  rewrite meldUniq_equation.
+  eapply vanilla. eapply last. eapply linkRank.
+  assert (toNat (rank p) = n). apply rankRank; auto; subst.
+  assert (toNat (rank q) = m). apply rankRank; auto; subst.
+  unfold rankN. 
+  rewrite H3 in *. rewrite H4 in *. subst.
+  unfold min.
+  remember (nat_compare (toNat (rank p)) (toNat (rank p))) as pp.
+  destruct pp; auto.
+  assert (toNat (rank p) = n). apply rankRank; auto; subst.
+  assert (toNat (rank q) = m). apply rankRank; auto; subst.
+  rewrite H3 in *. rewrite H4 in *. subst.
+  unfold min.
+  remember (nat_compare (toNat (rank p)) (toNat (rank p))) as pp.
+  destruct pp; auto.
+  simpl in H9. inversion H9.
+  simpl in H5. inversion H5. simpl in H5. inversion H5.
+  destruct ps.
+  
+  rewrite meldUniq_equation.
+  assert (toNat (rank p) = n). apply rankRank; auto; subst.
+  assert (toNat (rank q) = m). apply rankRank; auto; subst.
+  rewrite H3 in *; rewrite H4 in *; subst.
+  assert (min (toNat (rank p)) (toNat (rank p)) = toNat (rank p)) as rp.
+  unfold min.
+  remember (nat_compare (toNat (rank p)) (toNat (rank p))) as pp.
+  destruct pp; auto.
+  rewrite rp in *.
+  inversion H10. subst.
+  eapply skew; auto. 
+  eapply linkRank; auto.
+  subst.
+  eapply vanilla; auto.
+  eapply next. Focus 3. eauto. eapply linkRank; auto.
+  auto. omega.
+  simpl in H5. inversion H5.
+  destruct qs.
+  
+  rewrite meldUniq_equation.
+  assert (toNat (rank p) = n). apply rankRank; auto; subst.
+  assert (toNat (rank q) = m). apply rankRank; auto; subst.
+  rewrite H3 in *; rewrite H4 in *; subst.
+  assert (min (toNat (rank p)) (toNat (rank p)) = toNat (rank p)) as rp.
+  unfold min.
+  remember (nat_compare (toNat (rank p)) (toNat (rank p))) as pp.
+  destruct pp; auto.
+  rewrite rp in *.
+  inversion H6. subst.
+  eapply skew; destruct ps; auto.
+  apply linkRank; auto. apply linkRank; auto.
+  subst.
+  eapply vanilla; destruct ps; auto.
+  eapply next. Focus 3. eauto. apply linkRank; auto.
+  auto. omega. simpl in *.
+  eapply next. Focus 3. eauto.
+  apply linkRank; auto. auto. omega.
+  simpl in H11. inversion H11.
+
+  assert (toNat (rank p) = n). apply rankRank; auto; subst.
+  assert (toNat (rank q) = m). apply rankRank; auto; subst.
+  rewrite H3 in *; rewrite H4 in *; subst.
+  assert (min (toNat (rank p)) (toNat (rank p)) = toNat (rank p)) as rp.
+  unfold min.
+  remember (nat_compare (toNat (rank p)) (toNat (rank p))) as pp.
+  destruct pp; auto.
+  rewrite rp in *.
+  
+  assert (exists k, k >= min m0 m1
+    /\ posBinaryRank (meldUniq (ps,qs)) k).
+  apply H; auto.
+  destruct H2.
+  destruct H2.
+  remember (nat_compare (S (toNat (rank p))) x) as spx.
+  destruct spx.
+  assert (S (toNat (rank p)) = x). 
+  apply nat_compare_eq. auto.
+  subst.
+  apply skew; auto. apply linkRank; auto.
+  assert (S (toNat (rank p)) < x). apply nat_compare_lt. auto.
+  apply vanilla.
+  eapply next. apply linkRank; auto.
+  Focus 2.
+  eauto.
+  auto.
+  assert (S (toNat (rank p)) > x). apply nat_compare_gt. auto.
+  assert (S (toNat (rank p)) < x).
+  assert (S (toNat (rank p)) <= min m0 m1).
+  assert (S (toNat (rank p)) <= m0); auto with arith.
+  assert (S (toNat (rank p)) <= m1); auto with arith.
+  unfold min.
+  remember (nat_compare m0 m1) as mm; destruct mm; auto.
+  omega. assert False as f. omega. inversion f.
+
+  destruct H3.
+  destruct H3.
+  exists x. split.
+  auto with arith.
+  auto.
+
+  simpl in H.
+  intros.
+  pose (H (x,y)) as I.
+  simpl in I.
+  pose (I n m H0 H1) as J.
+  destruct J.
+  exists x0.
+  split.
+  destruct H2.
+  auto.
+  destruct H2. auto.
+Qed.
+  
+  
+Lemma preMeldRank :
+  forall x y,
+    skewBinaryRank x ->
+    skewBinaryRank y ->
+    skewBinaryRank (skewMeld x y).
+Proof with auto.
+  intros x y xR yR.
+  unfold skewMeld.
+  destruct x; destruct y.
+  simpl. rewrite meldUniq_equation. auto.
+  simpl. rewrite meldUniq_equation.
+  inversion yR; subst. rename t into p.
+  edestruct insNoDupe with (n := n) (x := p); eauto.
+  eapply posSkew. eapply vanilla.
+  destruct H0. eapply H1.
+  simpl. rewrite meldUniq_equation.
+  inversion xR; subst. rename t into p.
+  edestruct insNoDupe with (n := n) (x := p); eauto.
+  eapply posSkew. eapply vanilla.
+  destruct H0.
+  destruct (ins p x); eauto.
+
+  rename t0 into q.
+  inversion xR; inversion yR; subst.
+  rename n0 into m.
+  inversion H; inversion H1;
+    inversion H0; inversion H4; subst;
+  simpl; edestruct insNoDupe as [R S]; 
+    edestruct insNoDupe as [T U];
+      edestruct meldUniqRank as [P Q];
+        try (eapply posSkew; 
+          apply vanilla; 
+            destruct Q; eauto; eauto; eauto);
+        try (destruct U; eauto);
+          try (destruct S; eauto); eauto.
+Qed.
+
+
+Lemma splitPosRank :
+  forall v n c,
+    rankP (Node v n c) ->
+    forall r m, posBinaryRank r m ->
+      n <= m ->
+      forall h t z, (h,t) = split r z c ->
+        exists k, posSkewBinaryRank h k.
+Proof.
+  intros v n c H.
+  unfold rankP in H.
+  simpl in H.
+  dependent induction H; intros.
+  simpl in H1. inversion H1. subst.
+  eauto.
+  simpl in H3.
+  destruct y as [w j q].
+  simpl in *. assert (j = n). eauto. subst.
+  destruct q.
+  eapply IHrankN1. Focus 4.
+  eauto. auto. eauto. auto with arith.
+  eapply IHrankN1. Focus 4.
+  eauto. auto. eapply next. eauto.
+  Focus 2. eauto.
+  auto with arith. auto.
+  destruct x as [a b c]; destruct z as [d e f].
+  assert (b = n). eauto; subst.
+  assert (e = n). eauto; subst.
+  subst.
+  simpl in H3. destruct c; simpl in *.
+(**)
+  inversion H. subst. destruct f; simpl in *.
+  inversion H3. subst. clear H3.
+  exists m. eauto.
+  inversion H3. subst. clear H3.
+  inversion H0.
+  inversion H. subst.
+  destruct f. inversion H3; subst. clear H3.
+  exists (S n0). eauto.
+  inversion_clear H3; subst.
+  exists (S n0); eauto.
+  subst.
+  destruct f; simpl in *. inversion_clear H3; subst; eauto.
+inversion_clear H3; subst; eauto.
+subst. destruct f.
+inversion_clear H3; subst. eauto.
+inversion_clear H3; subst. eauto.
+Show Existentials.
+
+  destruct y as [a b c].
+  assert (b = n). eauto.
+  subst.
+  simpl in H3.
+  destruct c. assert (n=0). inversion H0. auto.
+  subst.
+  eapply IHrankN1. Focus 4. eauto. auto.
+  eauto. auto with arith.
+
+  destruct n. inversion H0.
+  
+  eapply IHrankN1.
+  Focus 4.
+  eapply H3. auto.
+  eapply next. eauto.
+  Focus 2. eauto.
+  auto. auto.
+Qed.
+
+Lemma splitRank :
+  forall v n c,
+    rankP (Node v n c) ->
+    forall h t z, (h,t) = split ($) z c ->
+      skewBinaryRank h.
+Proof.
+  intros v n c H.
+  unfold rankP in H.
+  simpl in H.
+  dependent induction H; intros.
+  simpl in H. inversion H; subst. eauto.
+  
+  destruct y as [a b c].
+  assert (b = n); eauto; subst.
+  simpl in H1.
+  destruct c. inversion H0. subst.
+  eapply IHrankN1. auto. eauto.
+  destruct n. inversion H0.
+  assert (exists k, posSkewBinaryRank h k).
+  eapply splitPosRank.
+  Focus 4. eauto.
+  Focus 2. eapply last. eauto.
+  eauto. auto.
+  destruct H2. eauto.
+  
+  destruct x as [a b c]; destruct z as [d e f].
+  assert (b = n); eauto; subst.
+  assert (e = n); eauto; subst.
+  simpl in H1. destruct c.
+  inversion H. subst. destruct f.
+  inversion H1; eauto.
+  inversion H1; eauto.
+  destruct n. inversion H. destruct f.
+  inversion H1; subst; eauto.
+  inversion H1; subst; eauto.
+  
+  simpl in H1.
+  destruct y as [a b c].
+  assert (b = n); eauto; subst. simpl in *.
+  destruct c. inversion H0. subst.
+  eapply IHrankN1; eauto.
+  destruct n. inversion H0.
+  assert (exists k, posSkewBinaryRank h k).
+  eapply splitPosRank.
+  Focus 4. eauto. 
+  Focus 2. eapply last. eauto.
+  eauto. auto.
+  destruct H2. eauto.
+Qed.
+
+Lemma getMinBinRank:
+  forall x n,
+    rankN x n ->
+    forall xs m, posBinaryRank xs m ->
+      n < m ->
+      forall y z,
+        (y,z) = getMin x xs ->
+        (exists k, k >= n /\
+          posBinaryRank z k)
+        /\ (exists j, j >= n /\
+          rankN y j).
+Proof.
+  intros x n xn xs. 
+  generalize dependent x;
+    generalize dependent n.
+  induction xs; intros.
+  inversion H. rename t into a.
+  simpl in H1.
+  remember (getMin a xs) as axs.
+  destruct axs as [t ts].
+  remember (pLEQ (root x) (root t)) as rxt.
+  destruct rxt.
+  inversion_clear H1; subst.
+  split. exists m; eauto 10 with arith.
+  eauto.
+  inversion_clear H1; subst.
+  inversion H; subst.
+  simpl in Heqaxs; eauto.
+  inversion_clear Heqaxs; subst; eauto.
+  split. eauto 10.
+  eauto 10 with arith.
+  assert ((exists k, k >= m /\ posBinaryRank ts k) /\
+    (exists j, j >= m /\ rankN t j)).
+  eapply IHxs.
+  Focus 2. eauto. Focus 3. eauto.
+  eauto. eauto.
+  destruct H1.
+  destruct H1.
+  destruct H1.
+  destruct H2.
+  destruct H2.
+  split.
+  exists n. split; auto. eapply next. auto. Focus 2. eauto.
+  omega.
+  exists x1. split. omega. auto.
+Qed.
+
+Lemma getMinQRank:
+  forall x xs,
+    skewBinaryRank (x:::xs) ->
+    forall y z,
+      (y,z) = getMin x xs ->
+      skewBinaryRank z.
+Proof.
+  intros x xs xxs.
+  inversion xxs; subst.
+  inversion H; subst.
+  inversion H0; subst.
+  simpl; intros. inversion H1; subst; eauto.
+  intros.
+  assert ((exists k, k >= n /\
+    posBinaryRank z k)
+  /\ (exists j, j >= n /\
+    rankN y j)). eapply getMinBinRank.
+  Focus 4. eauto. auto. eauto. auto.
+  inversion H2. destruct H5. destruct H5.
+  eapply posSkew. eapply vanilla. eauto.
+  inversion H4; subst.
+  simpl. remember (pLEQ (root x) (root x0)) as xx0; destruct xx0; intros.
+  inversion_clear H1; subst; eauto.
+  inversion_clear H1; subst; eauto.
+  simpl.
+  intros.
+  remember (getMin x0 xs0) as x00; destruct x00.
+  rename t into p.
+  remember (pLEQ (root x) (root p)) as xp; destruct xp;
+    inversion_clear H5; subst.
+  eauto.
+  rename m0 into l.
+  assert ((exists k, k >= n /\
+    posBinaryRank l k)
+  /\ (exists j, j >= n /\
+    rankN p j)). eapply getMinBinRank.
+  Focus 4. eauto.
+  auto. eauto. auto.
+  inversion H5.
+  destruct H6.
+  destruct H6.
+  apply posSkew with (n := n).
+  destruct H6. eapply skew. eauto. eauto.
+  eapply vanilla.
+  eapply next. eauto. Focus 2. eauto. omega.
+Qed.
+
+Lemma getMinTRank:
+  forall x xs,
+    skewBinaryRank (x:::xs) ->
+    forall y z,
+      (y,z) = getMin x xs ->
+      rankP y.
+Proof.
+  intros x xs; generalize dependent x; induction xs; 
+    intros x; destruct x; unfold rankP; intros.
+  inversion_clear H0; simpl.
+  inversion H; subst.
+  inversion H0; subst.
+  inversion H1; subst.
+  pose H3 as NN.
+  apply rankDestruct in NN; subst. auto.
+  inversion H7.
+  inversion H5.
+
+  simpl in H0.
+  rename t into a.
+  remember (getMin a xs) as axs; destruct axs.
+  remember (pLEQ r (root t)) as ap; destruct ap;
+    inversion_clear H0; subst.
+  inversion H; subst.
+  inversion H0; subst.
+  inversion H1; subst.
+  pose H4 as NN.
+  apply rankDestruct in NN; subst; auto.
+  pose H3 as NN.
+  apply rankDestruct in NN; subst; auto.
+  eapply IHxs.
+  Focus 2. eauto.
+  inversion H; subst.
+  inversion H0; subst.
+  inversion H1; subst.
+  eauto.
+  eauto.
+Qed.
+
+(*
+Lemma deleteMinRank :
+  forall x,
+    skewBinaryRank x ->
+    skewBinaryRank (skewDeleteMin x).
+Proof.
+  intros x S.
+  unfold skewDeleteMin.
+  destruct x; eauto.
+  remember (getMin p x) as yz. destruct yz as [y z].
+  destruct y as [a b c].
+  remember (split ($) [] c) as rs.
+  destruct rs as [r s].
+  assert (skewBinaryRank r) as ss.
+  eapply splitRank. Focus 2. eauto.
+  eapply getMinTRank. Focus 2. eauto. auto.
+  assert (skewBinaryRank z) as zz.
+  eapply getMinQRank. Focus 2. eauto. auto.
+  assert (skewBinaryRank (preMeld z r)).
+  eapply preMeldRank; auto.
+  clear Heqrs.
+  induction s.
+  simpl; auto.
+  simpl.
+  apply preInsertRank; auto.
+Qed.
+*)
+
+Lemma extractMinRank :
+  forall x,
+    skewBinaryRank x ->
+    forall t u,
+      Some (t,u) = skewExtractMin x ->
+      skewBinaryRank u.
+Proof.
+  intros x S t u T.
+  unfold skewExtractMin in *.
+  destruct x; eauto. inversion T.
+  rename t0 into p.
+  remember (getMin p x) as yz. destruct yz as [y z].
+  destruct y as [a b c].
+  remember (split ($) [] c) as rs.
+  destruct rs as [r s].
+  assert (skewBinaryRank r) as ss.
+  eapply splitRank. Focus 2. eauto.
+  eapply getMinTRank. Focus 2. eauto. auto.
+  assert (skewBinaryRank z) as zz.
+  eapply getMinQRank. Focus 2. eauto. auto.
+  assert (skewBinaryRank (skewMeld z r)).
+  eapply preMeldRank; auto.
+  inversion_clear T; subst.
+  clear Heqrs.
+  induction s.
+  simpl; auto.
+  simpl.
+  apply preInsertRank; auto.
+Qed.
+End Order.
+End Carrier.
+
 
 Inductive rankN : Tree -> nat -> Prop :=
   singleton : forall x, rankN (Node x 0 ($)) 0
