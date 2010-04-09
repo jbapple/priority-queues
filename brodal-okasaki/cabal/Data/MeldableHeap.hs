@@ -5,6 +5,7 @@
 A heap is a container supporting the insertion of elements and the extraction of the minimum element.
 This library models the implementation of asymptotically optimal purely functional heaps given by Brodal and Okasaki in their paper \"Optimal Purely Functional Priority Queues\".
 The Coq proof assistant has been used to prove this implementation correct.
+The proofs are available in the Cabal package or at <http://code.google.com/p/priority-queues/>.
 -}
 module Data.MeldableHeap 
     (PQ()
@@ -19,9 +20,9 @@ module Data.MeldableHeap
 
 import qualified Data.MeldableHeap.BrodalOkasakiExtract as B
 
-type PQ a = B.PQ a Int
+type PQ a = B.PQ a Integer
 
-inst :: Ord a => B.MINQ a (B.PQ a Int)
+inst :: Ord a => B.MINQ a (B.PQ a Integer)
 inst = B.bootPQ 0 (+1) compare (<=)
 
 empty :: Ord a => PQ a
