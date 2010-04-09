@@ -5,8 +5,6 @@ Require Export List.
 
 Class MINQ {A PQ} `{ORDER A} := Minq {
 
-(*  O :> ORDER A; *)
-
   empty:PQ;
 
   insert: A -> PQ -> PQ;
@@ -16,12 +14,7 @@ Class MINQ {A PQ} `{ORDER A} := Minq {
   meld : PQ -> PQ -> PQ
 }.
 
-(*
-Extract Inductive list => "[]" ["[]" "(:)"].
-Extract Inductive prod => "(,)" ["(,)"].
-Extract Inductive option => 
-  "Prelude.Maybe" ["Prelude.Just" "Prelude.Nothing"].
-*)
+(* A Decidable Equivalence Relation der (respecting some order LEQ) is reflexive, symmetric, and transitive, and any two der-equal items are indistinguishable under LEQ *)
 
 Record DERP {A} `{ORDER A} (der:A -> A -> bool) := Derp {
 
@@ -51,6 +44,7 @@ Definition DER {A} `{ORDER A} := {der | DERP der}.
 
 Program Definition check {A} `{ORDER A} (s:DER) x y := s x y.
 
+(* listCount s x xs returns the number of iterms der-equal to x in xs *)
 
 Program Fixpoint listCount {A} `{ORDER A} (s:DER) x xs :=
   match xs with
@@ -64,12 +58,18 @@ Program Fixpoint listCount {A} `{ORDER A} (s:DER) x xs :=
 
 Class MINQV {A PQ} `{ORDER A} (m:MINQ) := Minqv {
 
+(* count der x p returns the number of elements in p der-equal to x *)
+
   count : DER -> A -> PQ -> nat;
+
+(* count = listCount . toList *)
 
   toListCount :
     forall s x y,
       count s x y
       = listCount s x (toList y);
+
+(* If two values are der-equal, count cannot distinguish between them *)
 
   countSAME :
     forall s x y,
@@ -87,6 +87,8 @@ Class MINQV {A PQ} `{ORDER A} (m:MINQ) := Minqv {
           then S oldCount
           else oldCount;
 
+(* If findMin finds a value x, then for all der-distinct values y in the heap, y <= x *)
+
   findMinCount :
     forall inp,
       match findMin inp with
@@ -98,6 +100,8 @@ Class MINQV {A PQ} `{ORDER A} (m:MINQ) := Minqv {
               else count same y inp > 0 ->
                 LEQ x y = true
       end;
+
+(* extractMin extracts the same element as findMin, and reduces its count in the heap by 1. It does not reduce any other counts *)
 
   extractMinCount :
     forall inp,
