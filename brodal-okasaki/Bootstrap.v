@@ -3608,33 +3608,48 @@ Proof with auto.
 Qed.
 
 
+Lemma toFromNat : forall n, toNat (fromNat n) = n.
+Proof.
+  induction n.
+  simpl. rewrite isoZero. auto.
+  simpl. rewrite isoSucc. auto.
+Qed.
+
 Lemma splitPosRank :
   forall v n c,
     rankP (Node v n c) ->
     forall r m, posBinaryRank r m ->
-      n <= m ->
+      toNat n <= m ->
       forall h t z, (h,t) = split r z c ->
         exists k, posSkewBinaryRank h k.
 Proof.
   intros v n c H.
   unfold rankP in H.
   simpl in H.
-  dependent induction H; intros.
+  dependent induction H generalizing n c; intros. subst.
+  destruct c.
   simpl in H1. inversion H1. subst.
-  eauto.
-  simpl in H3.
-  destruct y as [w j q].
-  simpl in *. assert (j = n). eauto. subst.
+  eauto. simpl in x1. inversion x1.
+  destruct c. simpl in x0. inversion x0. simpl in x0.
+  simpl in H3. inversion x0; subst. clear x0.
+  destruct t0 as [w j q].
+  simpl in *. assert (toNat j = n0). eauto. subst.
   destruct q.
-  eapply IHrankN1. Focus 4.
-  eauto. auto. eauto. auto with arith.
-  eapply IHrankN1. Focus 4.
-  eauto. auto. eapply next. eauto.
+  eapply IHrankNN1. Focus 4.
+  eauto. auto. eauto. auto with arith. omega.
+  eapply IHrankNN1. Focus 4.
+  eauto. auto.
+  unfold posBinaryRank. simpl.
+  eapply next. eauto.
   Focus 2. eauto.
-  auto with arith. auto.
-  destruct x as [a b c]; destruct z as [d e f].
-  assert (b = n). eauto; subst.
-  assert (e = n). eauto; subst.
+  auto with arith. omega. auto.
+  destruct c. simpl in x1. inversion x1.
+  destruct c. simpl in x1. inversion x1.
+  simpl in x1. inversion x1. subst. clear x1.
+  destruct c. 
+  destruct t0 as [a b c]; destruct t1 as [d e f].
+  assert (toNat b = n0). eauto; subst.
+  assert (toNat e = n0). eauto; subst.
   subst.
   simpl in H3. destruct c; simpl in *.
 (**)
@@ -3642,37 +3657,45 @@ Proof.
   inversion H3. subst. clear H3.
   exists m. eauto.
   inversion H3. subst. clear H3.
-  inversion H0.
-  inversion H. subst.
+  rewrite H5 in H0. rewrite<- H8 in H0.
+  inversion H0. subst.
   destruct f. inversion H3; subst. clear H3.
-  exists (S n0). eauto.
+  exists (toNat b).
+  apply vanilla.
+  simpl.
+  eapply next. auto. Focus 2. eauto. omega.
   inversion_clear H3; subst.
-  exists (S n0); eauto.
-  subst.
-  destruct f; simpl in *. inversion_clear H3; subst; eauto.
-inversion_clear H3; subst; eauto.
-subst. destruct f.
-inversion_clear H3; subst. eauto.
-inversion_clear H3; subst. eauto.
-Show Existentials.
-
-  destruct y as [a b c].
-  assert (b = n). eauto.
-  subst.
+  exists (toNat e); eauto. subst.
+  unfold posSkewBinaryRank. simpl.
+  apply skew. auto. rewrite H5. auto.
+  simpl in H0.
+  subst. rewrite H5 in H0. auto.
+  eapply next. rewrite H5. auto. Focus 2.
+  eauto. omega.
+  simpl in H7. inversion H7.
+  destruct c. inversion x1. destruct c.
+  inversion x1. simpl in x1.
+  inversion x1; subst.
+  destruct t0. clear x1. simpl in H5.
+  inversion H5. subst. clear H5.
   simpl in H3.
-  destruct c. assert (n=0). inversion H0. auto.
-  subst.
-  eapply IHrankN1. Focus 4. eauto. auto.
-  eauto. auto with arith.
-
-  destruct n. inversion H0.
-  
-  eapply IHrankN1.
-  Focus 4.
-  eapply H3. auto.
-  eapply next. eauto.
+  destruct t1; simpl in *.
+  destruct m0.
+  destruct m1. simpl in *. clear H8.
+  eapply IHrankNN1. Focus 4. eauto.
   Focus 2. eauto.
-  auto. auto.
+  instantiate (1 := fromNat n0).
+  rewrite toFromNat. auto. 
+  rewrite toFromNat. omega.
+  clear H8.
+  eapply IHrankNN1. Focus 4. eauto.
+  Focus 2. 
+  assert (toNat n3 = n0). eauto.
+  unfold posBinaryRank. simpl.
+  eapply next. eauto. Focus 2. eauto.
+  instantiate (1 := fromNat n0).
+  rewrite toFromNat. auto. omega. rewrite toFromNat. auto.
+  inversion H8.
 Qed.
 
 Lemma splitRank :
@@ -3683,46 +3706,82 @@ Lemma splitRank :
 Proof.
   intros v n c H.
   unfold rankP in H.
-  simpl in H.
-  dependent induction H; intros.
+  simpl in H. unfold rankPN in *.
+  simpl in *.
+  dependent induction H generalizing v n c; intros.
+  Case "singleton".
+  destruct c.
   simpl in H. inversion H; subst. eauto.
-  
-  destruct y as [a b c].
-  assert (b = n); eauto; subst.
+  inversion x1.
+  Case "simple".
+
+  destruct c. inversion x0. inversion x0. subst. clear x0.  
+
+  rename t0 into y.
+  destruct y as [a b d].
+  assert (toNat b = n0); eauto; subst.
   simpl in H1.
-  destruct c. inversion H0. subst.
-  eapply IHrankN1. auto. eauto.
-  destruct n. inversion H0.
-  assert (exists k, posSkewBinaryRank h k).
-  eapply splitPosRank.
-  Focus 4. eauto.
-  Focus 2. eapply last. eauto.
-  eauto. auto.
-  destruct H2. eauto.
-  
-  destruct x as [a b c]; destruct z as [d e f].
-  assert (b = n); eauto; subst.
-  assert (e = n); eauto; subst.
-  simpl in H1. destruct c.
-  inversion H. subst. destruct f.
-  inversion H1; eauto.
-  inversion H1; eauto.
-  destruct n. inversion H. destruct f.
-  inversion H1; subst; eauto.
-  inversion H1; subst; eauto.
-  
-  simpl in H1.
-  destruct y as [a b c].
-  assert (b = n); eauto; subst. simpl in *.
-  destruct c. inversion H0. subst.
-  eapply IHrankN1; eauto.
-  destruct n. inversion H0.
-  assert (exists k, posSkewBinaryRank h k).
-  eapply splitPosRank.
-  Focus 4. eauto. 
-  Focus 2. eapply last. eauto.
-  eauto. auto.
-  destruct H2. eauto.
+    destruct d.
+    SCase "d = ($)".
+      inversion H0. subst.
+      eapply IHrankNN1. auto. auto. eauto.
+    SCase "d = t0 :: d".
+      assert (exists k, posSkewBinaryRank h k).
+      eapply splitPosRank.
+      Focus 4. eauto. unfold rankP.
+      simpl. unfold rankPN. simpl.
+      simpl in *. eapply H.
+      unfold posBinaryRank. simpl. eapply last. eauto.
+      auto.
+      destruct H2. eauto.
+  Case "skewA".
+    subst.
+    destruct c. inversion x1.
+    destruct c. inversion x1.
+    destruct c. Focus 2. inversion x1.
+    simpl in x1.
+    inversion x1; subst.  clear x1.
+
+    destruct t0. simpl in H1.
+    destruct m; simpl in *.
+    destruct t1; simpl in *.
+    destruct m; simpl in *.
+    inversion_clear H1; subst; auto.
+    inversion_clear H1; subst; auto.
+    unfold skewBinaryRank. simpl.
+    eapply posSkew. eapply vanilla. eapply last. eauto.
+    destruct t1; simpl in *.
+    destruct m0; simpl in *.
+    inversion_clear H1; subst; auto.
+    eapply posSkew. eapply vanilla. eapply last. eauto.
+    inversion_clear H1; subst; auto.
+    unfold skewBinaryRank. simpl.
+    eapply posSkew. eapply skew. eauto.
+    eapply last. eauto.
+
+Case "skewB".
+    subst.
+    destruct c. inversion x1.
+    destruct c. inversion x1.
+    simpl in x1. inversion x1. subst. clear x1.
+
+    destruct t0. simpl in H1.
+    destruct m; simpl in *.
+    destruct t1; simpl in *.
+    destruct m; simpl in *.
+
+    eapply IHrankNN1 with (n := fromNat n0) in H1; auto.
+    rewrite toFromNat; eauto. rewrite toFromNat. auto.
+
+    eapply splitPosRank with (n := fromNat n0) in H1.
+    destruct H1. eauto.
+    unfold rankP. simpl. unfold rankPN. simpl. 
+    rewrite toFromNat. eauto.
+    unfold posBinaryRank. simpl.
+    apply last. eauto.
+    rewrite toFromNat. auto.
+
+    inversion H3.
 Qed.
 
 Lemma getMinBinRank:
