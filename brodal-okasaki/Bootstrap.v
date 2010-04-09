@@ -11,10 +11,6 @@ Variable N:Type.
 Variable zero : N.
 Variable succ : N -> N.
 Variable comp : N -> N -> comparison.
-Variable toNat : N -> nat.
-Variable isoZero : toNat zero = 0.
-Variable isoSucc : forall n, toNat (succ n) = S (toNat n).
-Variable isoComp : forall n m, comp n m = nat_compare (toNat n) (toNat m).
 
 Fixpoint fromNat (x:nat) : N :=
   match x with
@@ -2499,6 +2495,14 @@ with ManyN :=
   CilN : ManyN
 | NonsN : TreeN -> ManyN -> ManyN.
 
+Section ToNat.
+
+Variable toNat : N -> nat.
+Variable isoZero : toNat zero = 0.
+Variable isoSucc : forall n, toNat (succ n) = S (toNat n).
+Variable isoComp : forall n m, comp n m = nat_compare (toNat n) (toNat m).
+
+
 Fixpoint toNatT x :=
   match x with
     | Node a b c => NodeN (toNatR a) (toNat b) (toNatM c)
@@ -3957,5 +3961,6 @@ Proof.
   simpl.
   apply preInsertRank; auto.
 Qed.
+End ToNat.
 End Order.
 End Carrier.
