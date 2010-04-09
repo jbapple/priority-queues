@@ -8,3 +8,5 @@ syntax: glob
 *.o
 *.zip
 *.prof
+dist
+*.tgz
