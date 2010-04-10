@@ -20,9 +20,9 @@ module Data.MeldableHeap
 
 import qualified Data.MeldableHeap.BrodalOkasakiExtract as B
 
-type PQ a = B.PQ a Integer
+type PQ = B.BootWrap Integer
 
-inst :: Ord a => B.MINQ a (B.PQ a Integer)
+inst :: Ord a => B.MINQ a (PQ a)
 inst = B.bootPQ 0 (+1) compare (<=)
 
 empty :: Ord a => PQ a

@@ -49,12 +49,12 @@ meld h mINQ x x0 =
   case mINQ of
     Minq empty0 insert0 findMin0 extractMin0 toList0 meld0 -> meld0 x x0
 
-data Tree a n = Node (Root a n) n (Many a n)
-data Root a n = Top a (Many a n)
-data Many a n = Cil
-                | Nons (Tree a n) (Many a n)
+data Tree n a = Node (Root n a) n (Many n a)
+data Root n a = Top a (Many n a)
+data Many n a = Cil
+                | Nons (Tree n a) (Many n a)
 
-rank :: (Tree a1 a2) -> a2
+rank :: (Tree a1 a2) -> a1
 rank x =
   case x of
     Node r0 r m -> r
@@ -64,7 +64,7 @@ root x =
   case x of
     Node v n m -> v
 
-toListR :: (Root a1 a2) -> ([] a1) -> [] a1
+toListR :: (Root a1 a2) -> ([] a2) -> [] a2
 toListR =
   let
     toListT x r =
@@ -79,7 +79,7 @@ toListR =
         Nons h t -> toListT h (toListM t r)
   in toListR0
 
-link :: (a2 -> a2) -> (ORDER a1) -> (Tree a1 a2) -> (Tree 
+link :: (a1 -> a1) -> (ORDER a2) -> (Tree a1 a2) -> (Tree 
         a1 a2) -> Tree a1 a2
 link succ o x y =
   case x of
@@ -92,7 +92,7 @@ link succ o x y =
               Prelude.True -> Node v (succ n) (Nons y p)
               Prelude.False -> Node w (succ m) (Nons x q)))
 
-skewLink :: (a2 -> a2) -> (ORDER a1) -> (Tree a1 a2) -> (Tree 
+skewLink :: (a1 -> a1) -> (ORDER a2) -> (Tree a1 a2) -> (Tree 
             a1 a2) -> (Tree a1 a2) -> Tree a1 a2
 skewLink succ o x y z =
   case x of
@@ -117,8 +117,8 @@ skewLink succ o x y z =
                         Prelude.True -> Node b (succ j) (Nons x (Nons z q))
                         Prelude.False -> Node c (succ k) (Nons x (Nons y r))))))
 
-ins :: (a2 -> a2) -> (a2 -> a2 -> Prelude.Ordering) -> (ORDER 
-       a1) -> (Tree a1 a2) -> (Many a1 a2) -> Many 
+ins :: (a1 -> a1) -> (a1 -> a1 -> Prelude.Ordering) -> (ORDER 
+       a2) -> (Tree a1 a2) -> (Many a1 a2) -> Many 
        a1 a2
 ins succ comp o t xs =
   case xs of
@@ -128,15 +128,15 @@ ins succ comp o t xs =
          Prelude.LT -> Nons t xs
          _ -> ins succ comp o (link succ o t y) ys)
 
-uniqify :: (a2 -> a2) -> (a2 -> a2 -> Prelude.Ordering) -> (ORDER 
-           a1) -> (Many a1 a2) -> Many a1 a2
+uniqify :: (a1 -> a1) -> (a1 -> a1 -> Prelude.Ordering) -> (ORDER 
+           a2) -> (Many a1 a2) -> Many a1 a2
 uniqify succ comp o xs =
   case xs of
     Cil -> Cil
     Nons y ys -> ins succ comp o y ys
 
-meldUniq :: (a2 -> a2) -> (a2 -> a2 -> Prelude.Ordering) -> (ORDER 
-            a1) -> ((,) (Many a1 a2) (Many a1 a2)) -> Many 
+meldUniq :: (a1 -> a1) -> (a1 -> a1 -> Prelude.Ordering) -> (ORDER 
+            a2) -> ((,) (Many a1 a2) (Many a1 a2)) -> Many 
             a1 a2
 meldUniq succ comp o x =
   case x of
@@ -160,8 +160,8 @@ skewEmpty :: Many a1 a2
 skewEmpty =
   Cil
 
-skewInsert :: a2 -> (a2 -> a2) -> (a2 -> a2 -> Prelude.Ordering) -> (ORDER
-              a1) -> (Root a1 a2) -> (Many a1 a2) -> Many 
+skewInsert :: a1 -> (a1 -> a1) -> (a1 -> a1 -> Prelude.Ordering) -> (ORDER
+              a2) -> (Root a1 a2) -> (Many a1 a2) -> Many 
               a1 a2
 skewInsert zero succ comp o x ys =
   case ys of
@@ -174,13 +174,13 @@ skewInsert zero succ comp o x ys =
               Prelude.EQ -> Nons (skewLink succ o (Node x zero Cil) z1 z2) zr
               _ -> Nons (Node x zero Cil) ys))
 
-skewMeld :: (a2 -> a2) -> (a2 -> a2 -> Prelude.Ordering) -> (ORDER 
-            a1) -> (Many a1 a2) -> (Many a1 a2) -> Many 
+skewMeld :: (a1 -> a1) -> (a1 -> a1 -> Prelude.Ordering) -> (ORDER 
+            a2) -> (Many a1 a2) -> (Many a1 a2) -> Many 
             a1 a2
 skewMeld succ comp o x y =
   meldUniq succ comp o ((,) (uniqify succ comp o x) (uniqify succ comp o y))
 
-getMin :: (ORDER a1) -> (Tree a1 a2) -> (Many a1 a2) -> (,) 
+getMin :: (ORDER a2) -> (Tree a1 a2) -> (Many a1 a2) -> (,) 
           (Tree a1 a2) (Many a1 a2)
 getMin o x xs =
   case xs of
@@ -209,8 +209,8 @@ split t x c =
          Cil -> split t ((:) (root d) x) ds
          Nons t0 m -> split (Nons d t) x ds)
 
-skewExtractMin :: a2 -> (a2 -> a2) -> (a2 -> a2 -> Prelude.Ordering) ->
-                  (ORDER a1) -> (Many a1 a2) -> Prelude.Maybe
+skewExtractMin :: a1 -> (a1 -> a1) -> (a1 -> a1 -> Prelude.Ordering) ->
+                  (ORDER a2) -> (Many a1 a2) -> Prelude.Maybe
                   ((,) (Root a1 a2) (Many a1 a2))
 skewExtractMin zero succ comp o x =
   case x of
@@ -225,13 +225,13 @@ skewExtractMin zero succ comp o x =
                      fold_right (\x0 x1 -> skewInsert zero succ comp o x0 x1)
                        (skewMeld succ comp o t p) q)))
 
-data BootWrap a n = Empty
-                    | Full (Root a n)
+data BootWrap n a = Empty
+                    | Full (Root n a)
 
-type PQ a n = (BootWrap a n)
+type PQ n a = (BootWrap n a)
 
-bootInsert :: a2 -> (a2 -> a2) -> (a2 -> a2 -> Prelude.Ordering) -> (ORDER
-              a1) -> a1 -> (PQ a1 a2) -> PQ a1 a2
+bootInsert :: a1 -> (a1 -> a1) -> (a1 -> a1 -> Prelude.Ordering) -> (ORDER
+              a2) -> a2 -> (PQ a1 a2) -> PQ a1 a2
 bootInsert zero succ comp o x x0 =
   let x1 = Full (Top x skewEmpty) in
   (case x1 of
@@ -250,15 +250,15 @@ bootInsert zero succ comp o x x0 =
                          Prelude.False -> Full (Top w
                            (skewInsert zero succ comp o (Top v c) d)))))))
 
-bootFindMin :: (ORDER a1) -> (PQ a1 a2) -> Prelude.Maybe a1
+bootFindMin :: (ORDER a2) -> (PQ a1 a2) -> Prelude.Maybe a2
 bootFindMin o x =
   case x of
     Empty -> Prelude.Nothing
     Full r -> (case r of
                  Top v m -> Prelude.Just v)
 
-bootMeld :: a2 -> (a2 -> a2) -> (a2 -> a2 -> Prelude.Ordering) -> (ORDER 
-            a1) -> (PQ a1 a2) -> (PQ a1 a2) -> PQ a1 
+bootMeld :: a1 -> (a1 -> a1) -> (a1 -> a1 -> Prelude.Ordering) -> (ORDER 
+            a2) -> (PQ a1 a2) -> (PQ a1 a2) -> PQ a1 
             a2
 bootMeld zero succ comp o x x0 =
   case x of
@@ -277,9 +277,9 @@ bootMeld zero succ comp o x x0 =
                         Prelude.False -> Full (Top w
                           (skewInsert zero succ comp o (Top v c) d))))))
 
-bootExtractMin :: a2 -> (a2 -> a2) -> (a2 -> a2 -> Prelude.Ordering) ->
-                  (ORDER a1) -> (PQ a1 a2) -> Prelude.Maybe
-                  ((,) a1 (PQ a1 a2))
+bootExtractMin :: a1 -> (a1 -> a1) -> (a1 -> a1 -> Prelude.Ordering) ->
+                  (ORDER a2) -> (PQ a1 a2) -> Prelude.Maybe
+                  ((,) a2 (PQ a1 a2))
 bootExtractMin zero succ comp o x =
   case x of
     Empty -> Prelude.Nothing
@@ -294,18 +294,18 @@ bootExtractMin zero succ comp o x =
                         Top w d -> Full (Top w (skewMeld succ comp o d cs))))
               Prelude.Nothing -> Empty)))
 
-bootEmpty :: (ORDER a1) -> PQ a1 a2
+bootEmpty :: (ORDER a2) -> PQ a1 a2
 bootEmpty o =
   Empty
 
-bootToList :: (ORDER a1) -> (PQ a1 a2) -> [] a1
+bootToList :: (ORDER a2) -> (PQ a1 a2) -> [] a2
 bootToList o x =
   case x of
     Empty -> []
     Full y -> toListR y []
 
-bootPQ :: a2 -> (a2 -> a2) -> (a2 -> a2 -> Prelude.Ordering) -> (ORDER 
-          a1) -> MINQ a1 (PQ a1 a2)
+bootPQ :: a1 -> (a1 -> a1) -> (a1 -> a1 -> Prelude.Ordering) -> (ORDER 
+          a2) -> MINQ a2 (PQ a1 a2)
 bootPQ zero succ comp o =
   Minq (bootEmpty o) (\x x0 -> bootInsert zero succ comp o x x0) (\x ->
     bootFindMin o x) (\x -> bootExtractMin zero succ comp o x) (\x ->

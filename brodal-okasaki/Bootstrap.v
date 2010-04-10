@@ -6,8 +6,8 @@ Require Export Arith.
 
 Section Carrier.
 
-Variable A:Type.
 Variable N:Type.
+Variable A:Type.
 Variable zero : N.
 Variable succ : N -> N.
 Variable comp : N -> N -> comparison.
