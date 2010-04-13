@@ -11,3 +11,4 @@ syntax: glob
 dist
 *.tgz
 \#*\#
+*.class
