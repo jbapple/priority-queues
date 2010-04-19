@@ -12,7 +12,7 @@ Extract Inductive comparison =>
   "Prelude.Ordering" ["Prelude.EQ" "Prelude.LT" "Prelude.GT"].
 
 Extraction Inline and_rect sig_rect proj1_sig LEQ.
-Extraction Inline pLEQ aLEQ meldUniq_terminate.
+Extraction Inline pLEQ aLEQ meld1.
 Extraction Inline 
   preInsert preFindMin preMeld 
   preExtractMin preEmpty preToList.

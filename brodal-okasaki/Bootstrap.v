@@ -158,40 +158,25 @@ Definition uniqify xs :=
     | y:::ys => ins y ys
   end.
 
-Fixpoint length (x:Many) :=
-  match x with
-    | ($) => 0
-    | _:::xs => S (length xs)
-  end.
-
-Definition combLen (xy:Many * Many) := 
-  let (x,y) := xy in
-    length x + length y.
-
-Function meldUniq (xy:Many * Many) {measure combLen xy} : Many :=
-  match xy with
-    | (($),y) => y
-    | (x,($)) => x
-    | (p:::ps,q:::qs) => 
-      match comp  (rank p) (rank q) with
-        | Lt => p ::: meldUniq (ps, q:::qs)
-        | Gt => q ::: meldUniq (p:::ps, qs)
-        | Eq => ins (link p q) (meldUniq (ps,qs))
+Fixpoint meld1 f p ps z :=
+  match z with
+    | ($) => (p:::ps)
+    | r:::rs => 
+      match comp  (rank p) (rank r) with
+        | Lt => p ::: f z
+        | Gt => r ::: meld1 f p ps rs
+        | Eq => ins (link p r) (f rs)
       end
   end.
-Proof.
-  intros; subst.
-  unfold combLen.
-  simpl; omega.
+  
 
-  intros; subst.
-  unfold combLen.
-  simpl; omega.
-
-  intros; subst.
-  unfold combLen.
-  simpl; omega.
-Qed.
+Fixpoint meldUniq (x:Many) (y:Many) {struct x} : Many :=
+  match x with
+    | ($) => y
+    | p:::ps => 
+      let f := meldUniq ps in
+        meld1 f p ps y
+  end.
 
 Definition skewEmpty : Many := ($).
 
@@ -206,7 +191,7 @@ Definition skewInsert x ys :=
   end.
 
 Definition skewMeld x y :=
-  meldUniq (uniqify x, uniqify y).
+  meldUniq (uniqify x) (uniqify y).
 
 Fixpoint preFindMinHelp x xs :=
   match xs with 
@@ -261,14 +246,6 @@ Definition skewExtractMin x :=
       end
   end.
 
-(*
-Definition skewDeleteMin x :=
-  match skewExtractMin x with
-    | None => x
-    | Some (_,y) => y
-  end.
-*)
-
 Lemma Nil : forall x, feapM x ($).
 Proof.
   unfold feapM. simpl. auto.
@@ -314,10 +291,37 @@ Proof.
   intros. rewrite <- leqRefl; auto.
 Qed.
 
+Ltac cutThis x :=
+  let xx := fresh 
+    in remember x as xx; destruct xx.
+
 Ltac pisp t := 
   unfold aLEQ in *; unfold pLEQ in *; unfold amin in *;
   simpl in *;
   match goal with
+(*    | [ a : Tree,
+        _ : context[(match ?a with 
+                      | Top ?b ?c => ?d
+                    end)] 
+       |- _] => destruct a; pisp t*)
+    | [ |- feapM ?a 
+      (match comp ?b ?c with 
+         | Eq => ?d
+         | Lt => ?e
+         | Gt => ?f
+       end)] => cutThis (comp b c); pisp t
+    | [ |- feapT ?a 
+      (match comp ?b ?c with 
+         | Eq => ?d
+         | Lt => ?e
+         | Gt => ?f
+       end)] => cutThis (comp b c); pisp t
+    | [ |- feapR ?a 
+      (match comp ?b ?c with 
+         | Eq => ?d
+         | Lt => ?e
+         | Gt => ?f
+       end)] => cutThis (comp b c); pisp t
     | [ |- true = LEQ (oomin ?a ?b) ?a] 
         => apply minLess; pisp t
     | [ |- true = LEQ (oomin ?a ?b) ?b] 
@@ -350,6 +354,9 @@ Ltac pisp t :=
     | [ |- match ?a with | Top _ _ => _ end] => destruct a; auto; pisp t
     | [ _ : match ?a with | Top _ _ => _ end |- _] 
         => destruct a; auto; pisp t
+    | [ H : true = false |- _] => inversion H; pisp t
+    | [ H : False |- _] => inversion H; pisp t
+    | [ H : ?a = ?a |- _] => clear H; pisp t
     | _ => auto
   end.
 
@@ -520,10 +527,6 @@ Ltac cutIf :=
         in remember x as H; destruct H
   end.
 
-Ltac cutThis x :=
-  let xx := fresh 
-    in remember x as xx; destruct xx.
-
 
 Lemma preInsertHeapLess :
   forall a x,
@@ -534,14 +537,11 @@ Lemma preInsertHeapLess :
 Proof.
   intros; destruct ys; hisp.
   destruct ys; hisp.
-  cutThis (comp (rank t) (rank t0)).
   destruct t; destruct t0; destruct x; hisp.
   cutLEQ; hisp. cutLEQ; hisp.
   cutMin a. cutMin b.
   cutLEQ; hisp. cutMin b.
   cutMin b.
-
-  hisp. hisp.
 Qed.
 Hint Resolve preInsertHeapLess.
 
@@ -554,41 +554,36 @@ Lemma insHeapSome :
     feapM (amin a b) (ins x xs).
 Proof.
   induction xs; hisp; intros; hisp.
-  cutThis (comp (rank x) (rank t)); hisp.
   heapCut (amin (amin a b) b).
   unfold oomin. repeat (cutLEQ; hisp).
-  inversion Heqab.
   heapCut (amin (amin a b) b).
   unfold oomin. repeat (cutLEQ; hisp).
-  inversion Heqab.
 Qed.
 Hint Resolve insHeapSome.
  
-Lemma meldUniqHeapSome :
-  forall a x b y,
-    feapM a x ->
+Lemma meld1Some :
+  forall y f p ps a b,
+    (forall z c, feapM c z -> feapM (amin a c) (f z)) ->
+    feapT a p ->
+    feapM a ps ->
     feapM b y ->
-    feapM (amin a b) (meldUniq (x,y)).
+    feapM (amin a b) (meld1 f p ps y).
 Proof.
-  assert 
-    (let P := 
-      fun (xy:(Many*Many)) r =>
-        let (x,y) := xy in
-          forall a b,
-          feapM a x ->
-          feapM b y ->
-          feapM (amin a b) r
-            in forall xy, P xy (meldUniq xy)).
-  eapply meldUniq_ind; intros; hisp.
+  induction y; intros; hisp.
   heapCut (amin (amin a b) (amin a b)); hisp.
   unfold oomin; repeat (cutLEQ; hisp).
-  
-  intros. simpl in H.
-  pose (H (x,y)) as Hxy.
-  simpl in Hxy.
-  eapply Hxy. auto. eauto. 
+  apply H; hisp.
 Qed.
-Hint Resolve meldUniqHeapSome.
+Hint Resolve meld1Some.
+
+Lemma meldUniqHeapSome :
+  forall x a b y,
+    feapM a x ->
+    feapM b y ->
+    feapM (amin a b) (meldUniq x y).
+Proof.
+  induction x; intros; hisp.
+Qed.
 
 Lemma uniqifyHeap :
   forall a x, 
@@ -627,12 +622,13 @@ Proof.
   cutThis (getMin t xs).
   destruct x; destruct t0; hisp.
   destruct r0; hisp.
-  cutLEQ; hisp.
+  cutLEQ; hisp. 
   inversion_clear H1; subst; hisp.
   cutMin a.
   eapply IHxs in HeqH3; eauto.
-  rewrite dblMin in HeqH3.
+  rewrite dblMin in HeqH3; hisp.
   inversion_clear H1; subst; hisp.
+  cutMin b. 
 Qed.
 Hint Resolve getMinTHeap.
 
@@ -758,7 +754,7 @@ Proof.
   eapply weakenEach with (feapR (amin (amin b c) c)); 
     auto; intros; hisp.
   heapCut (amin (amin b c) c); hisp.
-  unfold oomin; repeat (cutLEQ; hisp). inversion Heqbc.
+  unfold oomin; repeat (cutLEQ; hisp). 
   eapply IHz with (y := Top a0 m0 :: y). Focus 4. eauto.
   eauto.
   hisp.
@@ -926,15 +922,6 @@ Definition preExtractMin x :=
       end)
   end.
 Hint Unfold preExtractMin.
-
-(*
-Definition preDeleteMin x :=
-  match preExtractMin x with
-    | None => x
-    | Some (_,y) => y
-  end.
-Hint Unfold preDeleteMin.
-*)
 
 Definition treeHeap x := exists v, feapT  v x.
 Definition rootHeap x := exists v, feapR  v x.
@@ -1325,35 +1312,33 @@ Proof.
   eapply IHy; eauto.
 Qed.
 
+Lemma meld1Count :
+  forall inq inp t x f g,
+    DERP f ->
+    forall 
+      (gcount:forall y, countM f x (g y) = countM f x inp + countM f x y),
+    countM f x (meld1 g t inp inq) =
+    countT f x t + countM f x inp + countM f x inq.
+Proof.
+  induction inq; intros; hisp.
+  cutThis (comp (rank t0) (rank t)); hisp.
+  rewrite insCount; hisp. rewrite linkCount; hisp.
+  rewrite gcount; hisp. omega.
+  rewrite gcount; hisp. omega.
+  rewrite IHinq; hisp. omega.
+Qed.
+
 Lemma meldUniqCount :
-  forall f inp inq x,
+  forall inp f inq x,
     DERP  f ->
-    countM f x (meldUniq (inp,inq))
+    countM f x (meldUniq inp inq)
     = countM f x inp
     + countM f x inq.
 Proof.
-  Check meldUniq_ind.
-  pose
-    (fun (pq:Many * Many) r =>
-      let (p,q) := pq in
-        forall f,
-          DERP f ->
-          forall x,
-            countM f x r = 
-            countM f x p +
-            countM f x q) as P.
-  assert (forall tu, P tu (meldUniq tu)).
-  apply meldUniq_ind; unfold P; clear P; lisp; intros.
-  rewrite H; auto. omega.
-  rewrite H; auto. omega.
-  rewrite insCount; auto.
-  rewrite H; auto. 
-  rewrite linkCount; auto. omega.
-  intros.
-  unfold P in *. clear P.
-  pose (H (inp,inq)) as hh.
-  lisp.
+  induction inp; intros; hisp.
+  rewrite meld1Count; hisp.
 Qed.
+
 
 Lemma preMeldCount :
   forall f inp inq x,
@@ -1363,30 +1348,12 @@ Lemma preMeldCount :
     + countM f x inq.
 Proof.
   intros; destruct inp; destruct inq; lisp;
-    unfold skewMeld; unfold uniqify;
-      rewrite meldUniq_equation; lisp.
+    unfold skewMeld; unfold uniqify; lisp.
   rewrite insCount; auto.
-  remember (ins t inp) as pp; destruct pp; 
-    rewrite Heqpp; rewrite insCount; lisp.
-  remember (ins t inp) as pp; destruct pp.
-  apply insCons in Heqpp. inversion Heqpp.
-  remember (ins t0 inq) as qq; destruct qq.
-  apply insCons in Heqqq. inversion Heqqq.
-  cutThis (comp  (rank t1) (rank t2)).
-  rewrite insCount; auto. rewrite linkCount; auto. 
-  rewrite meldUniqCount; auto.
-  rewrite <- insCount; auto. rewrite <- insCount; auto.
-  rewrite <- Heqpp. rewrite <- Heqqq. lisp. omega.
-
-  lisp. rewrite meldUniqCount; lisp.
-  rewrite <- insCount with (p := t); auto. 
-  rewrite <- insCount with (p := t0); auto.
-  rewrite <- Heqpp. rewrite <- Heqqq. lisp. omega.
-
-  lisp. rewrite meldUniqCount; lisp.
-  rewrite <- insCount with (p := t); auto. 
-  rewrite <- insCount with (p := t0); auto.
-  rewrite <- Heqpp. rewrite <- Heqqq. lisp. omega.
+  rewrite meldUniqCount; hisp.
+  rewrite insCount; hisp.
+  rewrite meldUniqCount; hisp.
+  repeat (rewrite insCount; hisp).
 Qed.
 
 Lemma meldCount :
@@ -2124,204 +2091,374 @@ Definition min x y :=
     | _ => y
   end.
 
+Lemma meld1Rank :
+  forall y g p ps l n m
+    (grank:forall z i, 
+      posBinaryRank z i ->
+      exists j, j >= min n i /\ posBinaryRank (g z) j)
+    (gnil: posBinaryRank (g ($)) n),
+    l < n ->
+    rankN p l ->
+    posBinaryRank ps n ->
+    posBinaryRank y m ->
+    exists k, k >= min (min l n) m
+      /\ posBinaryRank (meld1 g p ps y) k.
+Proof.
+  induction y; intros; hisp.
+  Case "y = ($)".
+    inversion H2.
+  Case "y = t ::: y".
+    destruct p; simpl.
+    assert (toNat n0 = l). inversion H0; hisp.
+    subst.
+    inversion H2; subst.
+    SCase "last".
+      subst. destruct y; hisp.
+      SSCase "y = ($)".
+        destruct t; hisp.
+        assert (toNat n1 = m). inversion H6; hisp.
+        subst.
+        cutThis (comp n0 n1); hisp.
+        SSSCase "n0 = n1".
+          assert (toNat n0 = toNat n1); hisp.
+            rewrite isoComp in HeqH3. apply nat_compare_eq; auto.
+          destruct r; destruct r0; hisp.
+          cutLEQ; hisp.
+          S4Case "a <= a0".
+            edestruct insNoDupeHelp with (n := toNat (succ n0)).
+            Focus 4.
+            exists x. hisp. rewrite isoSucc in H4.
+            unfold min. 
+            cutThis (nat_compare (toNat n0) n); try omega.
+            symmetry in HeqH7. apply nat_compare_eq in HeqH7; hisp.
+            subst.
+            cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+            cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+            symmetry in HeqH7. apply nat_compare_gt in HeqH7; hisp.
+            cutThis (nat_compare n (toNat n1)); try omega.
+            eapply H5.
+            unfold rankN. hisp.
+            rewrite isoSucc.
+            eapply simple; hisp.
+            rewrite H3; hisp.
+            eapply gnil.
+            rewrite isoSucc. omega.
+          S4Case "a0 < a".
+            edestruct insNoDupeHelp with (n := toNat (succ n1)).
+            Focus 4.
+            exists x. hisp. rewrite isoSucc in H4.
+            unfold min. 
+            cutThis (nat_compare (toNat n0) n); try omega.
+            symmetry in HeqH7. apply nat_compare_eq in HeqH7; hisp.
+            subst.
+            cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+            cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+            symmetry in HeqH7. apply nat_compare_gt in HeqH7; hisp.
+            cutThis (nat_compare n (toNat n1)); try omega.
+            eapply H5.
+            unfold rankN. hisp.
+            rewrite isoSucc.
+            eapply simple; hisp.
+            rewrite <- H3; hisp.
+            eapply gnil.
+            rewrite isoSucc. omega.
+        SSSCase "n0 < n1".
+          symmetry in HeqH3.
+          rewrite isoComp in HeqH3.
+          apply nat_compare_lt in HeqH3.
+          exists (toNat n0); hisp.
+          unfold min.
+          cutThis (nat_compare (toNat n0) n); try omega.
+          symmetry in HeqH0. apply nat_compare_eq in HeqH0. subst.
+          cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+          symmetry in HeqH0. apply nat_compare_lt in HeqH0. subst.
+          cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+          symmetry in HeqH1. apply nat_compare_eq in HeqH1. subst.
+          omega.
+          symmetry in HeqH1. apply nat_compare_gt in HeqH1. subst.
+          omega.
+          symmetry in HeqH0. apply nat_compare_gt in HeqH0. subst.
+          cutThis (nat_compare n (toNat n1)); try omega.
+          unfold posBinaryRank; hisp.
+          edestruct grank. Focus 2.
+          eapply next.
+          auto. Focus 2.
+          hisp. eauto. unfold posBinaryRank.
+          hisp. apply last. auto. hisp. eauto. 
+          hisp. unfold min in H3.
+          cutThis (nat_compare n (toNat n1)); try omega.
+        SSSCase "n0 > n1".
+          symmetry in HeqH3.
+          rewrite isoComp in HeqH3.
+          apply nat_compare_gt in HeqH3.
+          exists (toNat n1); hisp.
+          unfold min.
+          cutThis (nat_compare (toNat n0) n); try omega.
+          symmetry in HeqH0. apply nat_compare_eq in HeqH0. subst.
+          cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+          symmetry in HeqH0. apply nat_compare_lt in HeqH0. subst.
+          cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+          symmetry in HeqH1. apply nat_compare_lt in HeqH1. subst.
+          omega.
+          symmetry in HeqH0. apply nat_compare_gt in HeqH0. subst.
+          omega.
+          unfold posBinaryRank. hisp.
+          eapply next. auto. Focus 2.
+          eapply next. eauto. Focus 2.
+          eauto. omega. omega.
+      SSCase "y = t0 :: y".
+        inversion H5.
+    SCase "next".
+      destruct t; hisp.
+      assert (toNat n1 = m). inversion H5; hisp.
+      subst.
+      cutThis (comp n0 n1); hisp.
+      edestruct (grank y m1); hisp.
+      SSCase "n0 = n1".
+        symmetry in HeqH3. rewrite isoComp in HeqH3. 
+        apply nat_compare_eq in HeqH3.
+        destruct r; destruct r0; hisp.
+        cutLEQ.
+        SSSCase "a <= a0".
+            edestruct insNoDupeHelp with (n := toNat (succ n0)).
+            Focus 4.
+            exists x0. hisp. rewrite isoSucc in H7.
+            unfold min. 
+            cutThis (nat_compare (toNat n0) n); try omega.
+            symmetry in HeqH10. apply nat_compare_eq in HeqH10; hisp.
+            subst.
+            cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+            symmetry in HeqH10. apply nat_compare_lt in HeqH10; hisp.
+            cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+            symmetry in HeqH10. apply nat_compare_gt in HeqH10; hisp.
+            cutThis (nat_compare n (toNat n1)); try omega.
+
+            eapply H9.
+            unfold rankN. hisp.
+            rewrite isoSucc.
+            eapply simple; hisp.
+            rewrite HeqH3; hisp.
+            eauto.
+            rewrite isoSucc. 
+            unfold min in H3.
+            cutThis (nat_compare n m1); try omega.
+          S4Case "a0 < a".
+            edestruct insNoDupeHelp with (n := toNat (succ n1)).
+            Focus 4.
+            exists x0. hisp. rewrite isoSucc in H7.
+            unfold min. 
+            cutThis (nat_compare (toNat n0) n); try omega.
+            symmetry in HeqH10. apply nat_compare_eq in HeqH10; hisp.
+            subst.
+            cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+            cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+            symmetry in HeqH10. apply nat_compare_gt in HeqH10; hisp.
+            cutThis (nat_compare n (toNat n1)); try omega.
+            eapply H9.
+            unfold rankN. hisp.
+            rewrite isoSucc.
+            eapply simple; hisp.
+            rewrite <- HeqH3; hisp.
+            eapply H4.
+            rewrite isoSucc. 
+            unfold min in H3.
+            cutThis (nat_compare n m1); try omega.
+        SSSCase "n0 < n1".
+          symmetry in HeqH3.
+          rewrite isoComp in HeqH3.
+          apply nat_compare_lt in HeqH3.
+          edestruct (grank _ _ H2).
+          exists (toNat n0); hisp.
+          unfold min.
+          cutThis (nat_compare (toNat n0) n); try omega.
+          symmetry in HeqH7. apply nat_compare_eq in HeqH7. subst.
+          cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+          symmetry in HeqH7. apply nat_compare_lt in HeqH7. subst.
+          cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+          symmetry in HeqH0. apply nat_compare_eq in HeqH0. subst.
+          omega.
+          symmetry in HeqH0. apply nat_compare_gt in HeqH0. subst.
+          omega.
+          symmetry in HeqH7. apply nat_compare_gt in HeqH7. subst.
+          cutThis (nat_compare n (toNat n1)); try omega.
+          unfold posBinaryRank; hisp.
+          eapply next.
+          auto. Focus 2.
+          hisp. eauto. 
+          unfold min in H3.
+          cutThis (nat_compare n (toNat n1)); try omega.
+        SSSCase "n0 > n1".
+          symmetry in HeqH3.
+          rewrite isoComp in HeqH3.
+          apply nat_compare_gt in HeqH3.
+          exists (toNat n1); hisp.
+          unfold min.
+          cutThis (nat_compare (toNat n0) n); try omega.
+          symmetry in HeqH0. apply nat_compare_eq in HeqH0. subst.
+          cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+          symmetry in HeqH0. apply nat_compare_lt in HeqH0. subst.
+          cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
+          symmetry in HeqH1. apply nat_compare_lt in HeqH1. subst.
+          omega.
+          symmetry in HeqH0. apply nat_compare_gt in HeqH0. subst.
+          omega.
+          unfold posBinaryRank. hisp.
+          edestruct (IHy g (Node r n0 m0) ps); eauto.
+          eapply next. auto. Focus 2.
+          hisp; auto. eauto. hisp. 
+          unfold min in H3.
+          cutThis (nat_compare (toNat n0) n); try omega.
+          cutThis (nat_compare n m1); try omega.
+          cutThis (nat_compare (toNat n0) m1); try omega.
+          cutThis (nat_compare n m1); try omega.
+Qed.
+
+Lemma meld1EmpRank :
+  forall y g p l m
+    (grank:forall z i, posBinaryRank z i -> posBinaryRank (g z) i)
+    (gnil: ($) = g ($)),
+    rankN p l ->
+    posBinaryRank y m ->
+    exists k, k >= min l m
+      /\ posBinaryRank (meld1 g p ($) y) k.
+Proof.
+  induction y; intros; hisp.
+  inversion H0.
+  destruct p; destruct t; hisp.
+  assert (toNat n = l) as nl. inversion H; hisp.
+
+  inversion H0; subst; hisp.
+  Case "y = ($)".
+      destruct y; subst; hisp.
+      Focus 2. inversion H3.
+      rewrite <- gnil.
+      assert (toNat n0 = m) as nm. inversion H4; hisp.
+      subst.
+      rewrite isoComp.
+      cutThis (nat_compare (toNat n) (toNat n0)).
+      SCase "n = n0".
+        symmetry in HeqH1. apply nat_compare_eq in HeqH1. subst.
+        destruct r; destruct r0; hisp.
+        cutLEQ.
+        SSCase "a <= a0".
+          exists (toNat (succ n)); hisp.
+          rewrite isoSucc. unfold min.
+          cutThis (nat_compare (toNat n) (toNat n0)); try omega.
+          unfold posBinaryRank. hisp.
+          rewrite isoSucc. apply last; hisp.
+          apply simple; hisp.
+          rewrite HeqH1; auto.
+        SSCase "a0 < a".
+          exists (toNat (succ n0)); hisp.
+          rewrite isoSucc. unfold min.
+          cutThis (nat_compare (toNat n) (toNat n0)); try omega.
+          unfold posBinaryRank. hisp.
+          rewrite isoSucc. apply last; hisp.
+          apply simple; hisp.
+          rewrite <- HeqH1; auto.
+      SCase "n < n0".
+        exists (toNat n); hisp.
+        unfold min. rewrite <- HeqH1. omega.
+        symmetry in HeqH1. apply nat_compare_lt in HeqH1.
+        unfold posBinaryRank. hisp.
+        eapply next. auto. Focus 2.
+        eapply grank.
+        unfold posBinaryRank. hisp. apply last.
+        eauto. auto.
+      SCase "n > n0".
+        exists (toNat n0); hisp.
+        unfold min. rewrite <- HeqH1; auto.
+        symmetry in HeqH1. apply nat_compare_gt in HeqH1.
+        unfold posBinaryRank. hisp.
+        eapply next. auto. Focus 2.
+        apply last; eauto. auto.
+    Case "y = Node r0 n0 m1 ::: y".
+      assert (posBinaryRank (g y) m2) as gym. apply grank; hisp.
+      assert (toNat n0 = m) as nm. inversion H3; hisp.
+      subst.
+      rewrite isoComp.
+      cutThis (nat_compare (toNat n) (toNat n0)).
+      SCase "n = n0".
+        symmetry in HeqH1. apply nat_compare_eq in HeqH1. subst.
+        destruct r; destruct r0; hisp.
+        cutLEQ.
+        SSCase "a <= a0".
+            edestruct insNoDupeHelp with (n := toNat (succ n)).
+            Focus 4.
+            exists x. hisp. rewrite isoSucc in H1.
+            unfold min. 
+            cutThis (nat_compare (toNat n) (toNat n0)); try omega.
+            eapply H2.
+            unfold rankN. hisp.
+            rewrite isoSucc.
+            eapply simple; hisp.
+            rewrite HeqH1; hisp.
+            eauto.
+            rewrite isoSucc. omega.
+          S4Case "a0 < a".
+            edestruct insNoDupeHelp with (n := toNat (succ n0)).
+            Focus 4.
+            exists x. hisp. rewrite isoSucc in H1.
+            unfold min. 
+            cutThis (nat_compare (toNat n) (toNat n0)); try omega.
+            eapply H2.
+            unfold rankN. hisp.
+            rewrite isoSucc.
+            eapply simple; hisp.
+            rewrite <- HeqH1; hisp.
+            eauto.
+            rewrite isoSucc.  omega.
+        SSSCase "n0 < n1".
+          exists (toNat n); hisp.
+          unfold min.
+          rewrite <- HeqH1; omega.
+          symmetry in HeqH1.
+          apply nat_compare_lt in HeqH1.
+          unfold posBinaryRank; hisp.
+          eapply next.
+          auto. Focus 2.
+          eapply grank. eauto. auto.
+        SSSCase "n0 > n1".
+          exists (toNat n0); hisp.
+          unfold min.
+          rewrite <- HeqH1; omega.
+          symmetry in HeqH1.
+          apply nat_compare_gt in HeqH1.
+          unfold posBinaryRank; hisp.
+          edestruct (IHy g (Node r n m0) (toNat n) m2); auto.
+          eapply next.
+          auto. Focus 2.
+          hisp. eauto.
+          hisp.
+          unfold min in H1.
+          cutThis (nat_compare (toNat n) m2); try omega.
+Qed.
+
 Lemma meldUniqRank :
   forall x n y m,
     posBinaryRank x n ->
     posBinaryRank y m ->
     exists k, k >= min n m
-      /\ posBinaryRank (meldUniq (x,y)) k.
-Proof with auto.
-  assert 
-    (let P := 
-      fun (xy:(Many*Many)) r =>
-        let (x,y) := xy in
-          forall n m,
-            posBinaryRank x n ->
-            posBinaryRank y m ->
-            exists k, k >= min n m
-              /\ posBinaryRank r k
-            in forall xy, P xy (meldUniq xy)).
-  eapply meldUniq_ind; intros; auto.
-
+      /\ posBinaryRank (meldUniq x y) k.
+Proof.
+  induction x; intros; hisp.
   inversion H.
-  inversion H0.
-  assert (toNat (rank p) = n). inversion H0; apply rankRank; auto.
-  assert (toNat (rank q) = m). inversion H1; apply rankRank; auto.
+  inversion H. subst.
+  destruct x; hisp.
+  Focus 2. inversion H3.
+  apply meld1EmpRank; hisp.
   subst.
-  rewrite isoComp in e0.
-  assert (toNat (rank p) < toNat (rank q)). apply nat_compare_lt; auto.
-  inversion H0; subst. destruct ps.
-  unfold min. rewrite e0.
-  exists (toNat (rank p)); split; auto.
-  simpl. unfold posBinaryRank. simpl.
-  rewrite meldUniq_equation; fold toNatM.
-  Check meldUniq_equation.
-  eapply next.
-  Focus 2. 
-  eauto. auto. auto. simpl in H5. inversion H5.
-  unfold min. rewrite e0. 
-  exists (toNat (rank p)); split; auto.
-  assert (exists k, k >= min m (toNat (rank q))
-    /\ posBinaryRank (meldUniq (ps, q:::qs)) k).
-  apply H; auto.
-  destruct H3.
-  destruct H3. unfold posBinaryRank. simpl.
-  eapply next.
-  Focus 3.
-  eauto. eauto.
-  unfold min in H3.
-  remember (nat_compare m (toNat (rank q))) as mq; destruct mq; omega.
-  
-  assert (toNat (rank p) = n). inversion H0; apply rankRank; auto.
-  assert (toNat (rank q) = m). inversion H1; apply rankRank; auto.
-  subst.
-  assert (toNat (rank q) < toNat (rank p)).
-  rewrite isoComp in e0.
-  apply nat_compare_gt; auto.
-  inversion H1; subst.
-  destruct qs.
-  unfold min. rewrite <- isoComp.
-  rewrite e0.
-  exists (toNat (rank q)); split; auto.
-  rewrite meldUniq_equation.  unfold posBinaryRank. simpl.
-  eapply next.
-  Focus 3.
-  eauto. auto. auto. simpl in H5. inversion H5.
-  unfold min. rewrite <- isoComp.
-  rewrite e0. 
-  exists (toNat (rank q)); split; auto.
-  assert (exists k, k >= min (toNat (rank p)) m
-    /\ posBinaryRank (meldUniq (p:::ps, qs)) k).
-  apply H; auto.
-  destruct H3.
-  destruct H3. unfold posBinaryRank. simpl.
-  eapply next.
-  Focus 3.
-  eauto. eauto.
-  unfold min in H3.
-  remember (nat_compare (toNat (rank p)) m) as mq; destruct mq; omega.
 
-  assert (toNat (rank p) = toNat (rank q)). apply nat_compare_eq; auto.
-  rewrite <- isoComp; auto.
-  assert (exists k : nat,
-    k >= S (min n m)
-    /\ posBinaryRank (ins (link p q) (meldUniq (ps, qs))) k).
-  apply insNoDupe.
-  unfold posSkewBinaryRank. simpl.
-  inversion H0; inversion H1; subst.
-  destruct ps; destruct qs.
-  rewrite meldUniq_equation.
-  eapply vanilla. eapply last. eapply linkRank.
-  assert (toNat (rank p) = n). apply rankRank; auto; subst.
-  assert (toNat (rank q) = m). apply rankRank; auto; subst.
-  unfold rankN. 
-  rewrite H3 in *. rewrite H4 in *. subst.
-  unfold min.
-  remember (nat_compare (toNat (rank p)) (toNat (rank p))) as pp.
-  destruct pp; auto.
-  assert (toNat (rank p) = n). apply rankRank; auto; subst.
-  assert (toNat (rank q) = m). apply rankRank; auto; subst.
-  rewrite H3 in *. rewrite H4 in *. subst.
-  unfold min.
-  remember (nat_compare (toNat (rank p)) (toNat (rank p))) as pp.
-  destruct pp; auto.
-  simpl in H9. inversion H9.
-  simpl in H5. inversion H5. simpl in H5. inversion H5.
-  destruct ps.
-  
-  rewrite meldUniq_equation.
-  assert (toNat (rank p) = n). apply rankRank; auto; subst.
-  assert (toNat (rank q) = m). apply rankRank; auto; subst.
-  rewrite H3 in *; rewrite H4 in *; subst.
-  assert (min (toNat (rank p)) (toNat (rank p)) = toNat (rank p)) as rp.
-  unfold min.
-  remember (nat_compare (toNat (rank p)) (toNat (rank p))) as pp.
-  destruct pp; auto.
-  rewrite rp in *.
-  inversion H10. subst.
-  eapply skew; auto. 
-  eapply linkRank; auto.
-  subst.
-  eapply vanilla; auto.
-  eapply next. Focus 3. eauto. eapply linkRank; auto.
-  auto. omega.
-  simpl in H5. inversion H5.
-  destruct qs.
-  
-  rewrite meldUniq_equation.
-  assert (toNat (rank p) = n). apply rankRank; auto; subst.
-  assert (toNat (rank q) = m). apply rankRank; auto; subst.
-  rewrite H3 in *; rewrite H4 in *; subst.
-  assert (min (toNat (rank p)) (toNat (rank p)) = toNat (rank p)) as rp.
-  unfold min.
-  remember (nat_compare (toNat (rank p)) (toNat (rank p))) as pp.
-  destruct pp; auto.
-  rewrite rp in *.
-  inversion H6. subst.
-  eapply skew; destruct ps; auto.
-  apply linkRank; auto. apply linkRank; auto.
-  subst.
-  eapply vanilla; destruct ps; auto.
-  eapply next. Focus 3. eauto. apply linkRank; auto.
-  auto. omega. simpl in *.
-  eapply next. Focus 3. eauto.
-  apply linkRank; auto. auto. omega.
-  simpl in H11. inversion H11.
-
-  assert (toNat (rank p) = n). apply rankRank; auto; subst.
-  assert (toNat (rank q) = m). apply rankRank; auto; subst.
-  rewrite H3 in *; rewrite H4 in *; subst.
-  assert (min (toNat (rank p)) (toNat (rank p)) = toNat (rank p)) as rp.
-  unfold min.
-  remember (nat_compare (toNat (rank p)) (toNat (rank p))) as pp.
-  destruct pp; auto.
-  rewrite rp in *.
-  
-  assert (exists k, k >= min m0 m1
-    /\ posBinaryRank (meldUniq (ps,qs)) k).
-  apply H; auto.
-  destruct H2.
-  destruct H2.
-  remember (nat_compare (S (toNat (rank p))) x) as spx.
-  destruct spx.
-  assert (S (toNat (rank p)) = x). 
-  apply nat_compare_eq. auto.
-  subst.
-  apply skew; auto. apply linkRank; auto.
-  assert (S (toNat (rank p)) < x). apply nat_compare_lt. auto.
-  apply vanilla.
-  eapply next. apply linkRank; auto.
+  edestruct meld1Rank with (y := y); eauto.
   Focus 2.
-  eauto.
-  auto.
-  assert (S (toNat (rank p)) > x). apply nat_compare_gt. auto.
-  assert (S (toNat (rank p)) < x).
-  assert (S (toNat (rank p)) <= min m0 m1).
-  assert (S (toNat (rank p)) <= m0); auto with arith.
-  assert (S (toNat (rank p)) <= m1); auto with arith.
-  unfold min.
-  remember (nat_compare m0 m1) as mm; destruct mm; auto.
-  omega. assert False as f. omega. inversion f.
-
-  destruct H3.
-  destruct H3.
-  exists x. split.
-  auto with arith.
-  auto.
-
-  simpl in H.
-  intros.
-  pose (H (x,y)) as I.
-  simpl in I.
-  pose (I n m H0 H1) as J.
-  destruct J.
-  exists x0.
-  split.
-  destruct H2.
-  auto.
-  destruct H2. auto.
+  exists x0; hisp; try omega. 
+  unfold min at 2 in H1.
+  apply nat_compare_lt in H4. rewrite H4 in H1. auto.
+  clear IHx H.
+  induction x.
+  inversion H6.
+  simpl. auto.
 Qed.
-  
   
 Lemma preMeldRank :
   forall x y,
@@ -2332,13 +2469,13 @@ Proof with auto.
   intros x y xR yR.
   unfold skewMeld.
   destruct x; destruct y.
-  simpl. rewrite meldUniq_equation. auto.
-  simpl. rewrite meldUniq_equation.
+  simpl. auto.
+  simpl. 
   inversion yR; subst. rename t into p.
   edestruct insNoDupe with (n := n) (x := p); eauto.
   eapply posSkew. eapply vanilla.
   destruct H0. eapply H1.
-  simpl. rewrite meldUniq_equation.
+  simpl. 
   inversion xR; subst. rename t into p.
   edestruct insNoDupe with (n := n) (x := p); eauto.
   eapply posSkew. eapply vanilla.
