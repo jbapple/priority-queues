@@ -136,25 +136,22 @@ uniqify succ comp o xs =
     Nons y ys -> ins succ comp o y ys
 
 meldUniq :: (a1 -> a1) -> (a1 -> a1 -> Prelude.Ordering) -> (ORDER 
-            a2) -> ((,) (Many a1 a2) (Many a1 a2)) -> Many 
+            a2) -> (Many a1 a2) -> (Many a1 a2) -> Many 
             a1 a2
-meldUniq succ comp o x =
+meldUniq succ comp o x y =
   case x of
-    (,) x0 y ->
-      (case x0 of
-         Cil -> y
-         Nons p ps ->
-           (case y of
-              Cil -> Nons p ps
-              Nons q qs ->
-                (case comp (rank p) (rank q) of
-                   Prelude.EQ ->
-                     ins succ comp o (link succ o p q)
-                       (meldUniq succ comp o ((,) ps qs))
-                   Prelude.LT -> Nons p
-                     (meldUniq succ comp o ((,) ps (Nons q qs)))
-                   Prelude.GT -> Nons q
-                     (meldUniq succ comp o ((,) (Nons p ps) qs)))))
+    Cil -> y
+    Nons p ps ->
+      let
+        meld1 f p0 ps0 z =
+          case z of
+            Cil -> Nons p0 ps0
+            Nons r rs ->
+              (case comp (rank p0) (rank r) of
+                 Prelude.EQ -> ins succ comp o (link succ o p0 r) (f rs)
+                 Prelude.LT -> Nons p0 (f z)
+                 Prelude.GT -> Nons r (meld1 f p0 ps0 rs))
+      in meld1 (\x0 -> meldUniq succ comp o ps x0) p ps y
 
 skewEmpty :: Many a1 a2
 skewEmpty =
@@ -178,7 +175,7 @@ skewMeld :: (a1 -> a1) -> (a1 -> a1 -> Prelude.Ordering) -> (ORDER
             a2) -> (Many a1 a2) -> (Many a1 a2) -> Many 
             a1 a2
 skewMeld succ comp o x y =
-  meldUniq succ comp o ((,) (uniqify succ comp o x) (uniqify succ comp o y))
+  meldUniq succ comp o (uniqify succ comp o x) (uniqify succ comp o y)
 
 getMin :: (ORDER a2) -> (Tree a1 a2) -> (Many a1 a2) -> (,) 
           (Tree a1 a2) (Many a1 a2)
