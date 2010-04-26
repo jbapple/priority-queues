@@ -58,7 +58,7 @@ extractMink k (KDHeap xs) =
       Least top -> 
           Just $
           let leastK = get (top ! k) k
-              moreK (Least y) = get (y ! k) k > leastK
+              moreK (Least y) = get (y ! k) k >= leastK
               (hd,tl) = F.split moreK xs -- O(lg |xs|)
               Dim ans F.:< rest = F.viewl tl -- O(1)
           in (ans, KDHeap (hd F.>< rest)) -- O(k lg |xs|)
