@@ -1,0 +1,29 @@
+\documentclass{scrreprt}
+\usepackage{paralist}
+\usepackage{graphicx}
+\usepackage[final]{hcar}
+
+\begin{document}
+
+\begin{hcarentry}{Verified priority queues}
+\report{Jim Apple}
+\status{stable}
+%\participants{(PARTICIPANTS OTHER THAN MYSELF)}% optional
+\makeheader
+
+A priority queue (or sometimes ``heap'') is a container supporting the insertion of elements and the extraction of the minimum element.
+Gerth Brodal and Chris Okasaki presented a purely functional priority queue that also supports an $O(1)$ meld operation in their paper ``Optimal Purely Functional Priority Queues''.
+This project provides an implementation of these priority queues that has been verified using the Coq proof assistant.
+
+It is available on Hackage and can be installed with ``cabal install meldable-heap''. 
+The Coq proofs are included in the package.
+%(WHAT IS IT?)
+%(WHAT IS ITS STATUS? / WHAT HAS HAPPENED SINCE LAST TIME?)
+%(CAN OTHERS GET IT?)
+%(WHAT ARE THE IMMEDIATE PLANS?)
+
+\FurtherReading
+  \url{http://hackage.haskell.org/package/meldable-heap/}
+\end{hcarentry}
+
+\end{document}
