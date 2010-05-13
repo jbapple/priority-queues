@@ -1,4 +1,4 @@
-module Data.MeldableHeap.BrodalOkasakiExtract where
+module Data.MeldableHeap.LazyBrodalOkasakiExtract where
 
 import qualified Prelude
 
