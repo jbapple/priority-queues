@@ -1,0 +1,26 @@
+Changes in version 2.0.1:
+==========================================
+
+* Added examples to Haddock documentation
+* Added this CHANGELOG
+
+Changes in version 2.0:
+==========================================
+
+* Added a strict and a lazy version
+
+Changes in version 1.1.2:
+==========================================
+
+* Moved proof files from "extra-source-files" to "data-files" in cabal configuration
+
+Changes in version 1.1.1:
+==========================================
+
+* Change definition of meld to avoid use of Coq's "Function" feature, relying on higher-order fixpoints instead. The Coq manual calls "Function" experimental.
+
+Changes in version 1.1:
+==========================================
+
+* Remove some unused parts of Coq files
+* Change type parameter order of heap type to make it usable in contexts requiring kind * -> *
