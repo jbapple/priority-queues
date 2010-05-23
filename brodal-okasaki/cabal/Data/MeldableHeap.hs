@@ -8,8 +8,8 @@ The Coq proof assistant has been used to prove this implementation correct.
 The proofs are available in the Cabal package or at <http://code.google.com/p/priority-queues/>.
 
 The default implementation is lazy.
-A strict implementation is available in this package as 'Data.MeldableHeap.Strict'. 
-The lazy implementation is available in this module ('Data.MeldableHeap') or in 'Data.MeldableHeap.Lazy'.
+A strict implementation is available in this package as "Data.MeldableHeap.Strict". 
+The lazy implementation is available in this module ("Data.MeldableHeap") or in "Data.MeldableHeap.Lazy".
 
 -}
 module Data.MeldableHeap 
