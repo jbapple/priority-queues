@@ -14,11 +14,11 @@ A lazy implementation is available in this package as "Data.MeldableHeap.Lazy".
 module Data.MeldableHeap.Strict 
     (PQ()
     ,empty
+    ,toList
     ,insert
     ,findMin
     ,extractMin
     ,meld
-    ,toList
     )
     where
 
