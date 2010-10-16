@@ -283,8 +283,6 @@ Proof.
   apply leqSymm; auto.
 Qed.
 
-Check minLeft. Print minLeft.
-
 Lemma dblMin : forall {t} `{ORDER t} (x:t), oomin x x = x.
 Proof.
   unfold oomin.
@@ -1061,7 +1059,7 @@ Hint Unfold preCount.
 Program Definition count d x (v:PQ) := preCount d x v.
 Hint Unfold count.
 
-Check all_ind.
+
 
 Lemma listAll :
   forall f q x,
@@ -1138,11 +1136,6 @@ Lemma emptyCount :
 Proof.
   intros; auto.
 Qed.
-
-Check countM.
-Check skewInsert.
-Print countM.
-Print skewInsert.
 
 Lemma insertCountM : 
   forall f x,
@@ -1479,7 +1472,6 @@ Proof.
   intros.
   unfold count; lisp.
   eauto.
-  Print ex.
   eapply ex_intro. split. eauto.
   destruct same; lisp. intros.
   remember (x0 y a) as xya; destruct xya; lisp.
