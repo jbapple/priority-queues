@@ -972,7 +972,7 @@ Next Obligation.
   apply preInsertHeapLess; hisp.
 Qed.
 
-Definition bootExtractMin (x:PQ) : option (A*PQ).
+Definition bootExtractMin : forall (x:PQ), option (A*PQ).
 refine (fun x =>
   match x with
     | exist x _ => 
