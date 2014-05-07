@@ -1523,6 +1523,7 @@ Instance bootV : MINQV bootPQ := {
   extractMinCount := extractMinCount
 }.
 
+(*
 Hint Unfold check.
 
 Inductive TreeN :=
@@ -1783,7 +1784,9 @@ Proof.
   generalize dependent isoSucc. clear isoSucc.
   generalize dependent isoComp. clear isoComp.
   generalize dependent zero. clear zero.*)
-  dependent induction xsm generalizing xs.
+  (*induction xsm.*)
+  dependent induction xsm. (* generalizing zero isoZero. *)
+  (*dependent induction xsm generalizing xs.*)
   Case "last".
 (*    clear toNat0 comp0 succ0.
     intros zero isoComp isoSucc isoZero.*)
@@ -1840,7 +1843,9 @@ Proof.
       forall x : Tree,
         rankN x n -> exists k : nat, k >= n /\ posBinaryRank (ins x xs) k) 
     as IH.
-    exact (IHxsm xs eq_refl).
+    apply (IHxsm xs isoComp0 isoSucc0 isoZero1 toNat isoZero2 isoSucc2 isoComp2 _ comp isoComp succ isoSucc zero); auto.
+    (*apply IHxsm.*)
+
     clear IHxsm.
     clear x.
     intros; hisp; tra0.
@@ -1896,7 +1901,7 @@ Proof.
       rewrite isoComp in HeqH3. symmetry in HeqH3.
       apply nat_compare_gt in HeqH3.
       assert False as f. omega. inversion f.
-Qed.
+Admitted.
 
 Lemma insNoDupe : 
   forall n x xs, 
@@ -2175,8 +2180,11 @@ Proof.
           edestruct grank. Focus 2.
           eapply next.
           auto. Focus 2.
-          hisp. eauto. unfold posBinaryRank.
-          hisp. apply last. auto. hisp. eauto. 
+          hisp. eauto. 
+          hisp. 
+Admitted.
+(*
+apply last. auto. hisp. eauto. 
           hisp. unfold min in H3.
           cutThis (nat_compare n (toNat n1)); try omega.
         SSSCase "n0 > n1".
@@ -2224,7 +2232,6 @@ Proof.
             cutThis (nat_compare (toNat n0) (toNat n1)); try omega.
             symmetry in HeqH10. apply nat_compare_gt in HeqH10; hisp.
             cutThis (nat_compare n (toNat n1)); try omega.
-
             eapply H9.
             unfold rankN. hisp.
             rewrite isoSucc.
@@ -2304,7 +2311,7 @@ Proof.
           cutThis (nat_compare (toNat n0) m1); try omega.
           cutThis (nat_compare n m1); try omega.
 Qed.
-
+*)
 Lemma meld1EmpRank :
   forall y g p l m
     (grank:forall z i, posBinaryRank z i -> posBinaryRank (g z) i)
@@ -2840,5 +2847,6 @@ Proof.
   apply preInsertRank; auto.
 Qed.
 End ToNat.
+*)
 End Order.
 End Carrier.
